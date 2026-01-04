@@ -1,0 +1,28 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+
+    // ✅ THIS FIXES expo-file-system TYPES
+    "moduleResolution": "bundler",
+
+    "paths": {
+      "@/*": [
+        "./*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts",
+    "../shared/**/*.ts",
+    "../shared/**/*.tsx",
+    ".expo/types/**/*.ts"
+, "src/utils/logAdminAction.ts.bak", "app/index.tsx.bak"  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
