@@ -19,6 +19,7 @@ import {
 import { listStudents } from "../../src/services/students";
 import { exportWeeklyAttendancePdf } from "../../src/services/exports/exportWeeklyAttendancePdf";
 import { MaterialIcons } from "@expo/vector-icons";
+import { listTerms } from "../../src/services/terms";
 
 
 /**
@@ -40,37 +41,60 @@ export default function WeeklyReport() {
   const [exportingWeeklyPdf, setExportingWeeklyPdf] = useState(false);
 
   /* ------------------------------------------------------------------ */
-  /* LOAD WEEKS + CLASSES */
-  /* ------------------------------------------------------------------ */
-  useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
+/* LOAD WEEKS + CLASSES + CURRENT TERM */
+/* ------------------------------------------------------------------ */
+useEffect(() => {
+  (async () => {
+    try {
+      setLoading(true);
 
-        const [w, cls] = await Promise.all([
-          listWeeks().catch(() => []),
-          listClasses().catch(() => []),
-        ]);
+      // 1️⃣ fetch terms and classes
+      const [terms, cls] = await Promise.all([
+        listTerms().catch(() => []),
+        listClasses().catch(() => []),
+      ]);
 
-        setWeeks(w || []);
+      // 2️⃣ find current term
+      const nowIso = new Date().toISOString().slice(0, 10);
+      const currentTerm =
+        terms.find((t) => t.isCurrent) ??
+        terms.find((t) => nowIso >= t.startDate && nowIso <= t.endDate) ??
+        null;
+
+      if (!currentTerm) {
+        Alert.alert(
+          "No active term",
+          "Please mark a term as current to view weekly reports."
+        );
+        setWeeks([]);
         setClasses(cls || []);
-
-        // auto-select current week
-        const today = new Date().toISOString().slice(0, 10);
-        const currentWeek =
-          w.find(
-            (wk) => today >= wk.startDate && today <= wk.endDate
-          ) ?? null;
-
-        setSelectedWeek(currentWeek);
-      } catch (e) {
-        console.error("load weeks/classes", e);
-        Alert.alert("Failed to load weeks or classes");
-      } finally {
-        setLoading(false);
+        setSelectedWeek(null);
+        return;
       }
-    })();
-  }, []);
+
+      // 3️⃣ fetch weeks only for current term
+      const w = await listWeeks(currentTerm.id).catch(() => []);
+
+      setWeeks(w || []);
+      setClasses(cls || []);
+
+      // 4️⃣ auto-select current week within this term
+      const currentWeek =
+  w.find((wk) => nowIso >= wk.startDate && nowIso <= wk.endDate) ??
+  w[w.length - 1] ??
+  null;
+
+setSelectedWeek(currentWeek);
+
+    } catch (e) {
+      console.error("load weeks/classes", e);
+      Alert.alert("Failed to load weeks or classes");
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, []);
+
 
   /* ------------------------------------------------------------------ */
   /* SORT WEEKS */
@@ -93,10 +117,24 @@ export default function WeeklyReport() {
     (async () => {
       try {
         setLoading(true);
+function getWeekQueryRange(week: any) {
+  // normalize week start/end to include full days
+const from = new Date(selectedWeek.startDate);
+const to = new Date(selectedWeek.endDate);
 
-        const fromIso = selectedWeek.startDate;
-        const toIso = selectedWeek.endDate;
+from.setHours(0, 0, 0, 0);
+to.setHours(23, 59, 59, 999);
 
+
+  return {
+    fromIso: from.toISOString(),
+    toIso: to.toISOString(),
+  };
+}
+
+const { fromIso, toIso } = getWeekQueryRange(selectedWeek);
+
+ 
         // -------- CLASS FILTER --------
         if (selectedClassKey) {
           const summaries = await computeClassSummary(
@@ -110,17 +148,32 @@ export default function WeeklyReport() {
 
           for (const s of studs) {
             if (s?.id) {
-              nameMap[s.id] =
-                s.name ?? s.displayName ?? s.rollNo ?? s.id;
+            nameMap[s.id] =
+  s.name ?? s.rollNo ?? s.shortId ?? s.id;
+
             }
           }
 
-          setStudentRows(
-            summaries.map((r) => ({
-              ...r,
-              studentName: nameMap[r.studentId] ?? r.studentId,
-            }))
-          );
+         if (summaries.length === 0) {
+  setStudentRows(
+    studs.map((s) => ({
+      studentId: s.id,
+      studentName: s.name ?? s.rollNo ?? s.id,
+      presentCount: 0,
+      absentCount: 0,
+      lateCount: 0,
+      percentagePresent: 0,
+    }))
+  );
+} else {
+  setStudentRows(
+    summaries.map((r) => ({
+      ...r,
+      studentName: nameMap[r.studentId] ?? r.studentId,
+    }))
+  );
+}
+
         }
         // -------- ALL CLASSES --------
         else {
@@ -325,17 +378,25 @@ export default function WeeklyReport() {
               {item.studentName ?? item.studentId}
             </Text>
 
-            <View className="flex-row justify-between mt-2">
-              <Text className="text-emerald-600">
-                P: {item.presentCount}
-              </Text>
-              <Text className="text-red-500">
-                A: {item.absentCount}
-              </Text>
-              <Text className="text-slate-700">
-                {item.percentagePresent.toFixed(1)}%
-              </Text>
-            </View>
+           <View className="flex-row justify-between mt-2">
+  <Text className="text-emerald-600">
+    P: {item.presentCount}
+  </Text>
+
+  <Text className="text-red-500">
+    A: {item.absentCount}
+  </Text>
+
+  {/* ✅ NEW — LATE COUNT */}
+  <Text className="text-amber-600">
+    L: {item.lateCount}
+  </Text>
+
+  <Text className="text-slate-700">
+    {item.percentagePresent.toFixed(1)}%
+  </Text>
+</View>
+
           </Pressable>
         ))
       )}

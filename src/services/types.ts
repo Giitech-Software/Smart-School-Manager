@@ -45,7 +45,14 @@ export type Term = {
   name: string;
   startDate: string;
   endDate: string;
+
+  /** 🔑 marks the active academic term */
+  isCurrent?: boolean;
+
+  createdAt?: any;
+  updatedAt?: any;
 };
+
 
 export type AdminLog = {
   id: string;

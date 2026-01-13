@@ -16,6 +16,9 @@ import { listWeeks } from "../../src/services/weeks";
 import { listClasses } from "../../src/services/classes";
 import { listStudents } from "../../src/services/students";
 
+import { Animated, Dimensions } from "react-native";
+
+
 interface Class {
   id: string;
   name: string;
@@ -31,10 +34,84 @@ export default function AdminIndex() {
   const [classesCount, setClassesCount] = React.useState<number | null>(null);
   const [studentsCount, setStudentsCount] = React.useState<number | null>(null);
   const [loadingCounts, setLoadingCounts] = React.useState(true);
-
+const [pageReady, setPageReady] = React.useState(false); // ✅ Add this line
   const [classes, setClasses] = React.useState<Class[]>([]);
   const [loadingClasses, setLoadingClasses] = React.useState(true);
 const [classesExpanded, setClassesExpanded] = React.useState(false);
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+const marqueeItems = [
+  { text: "Manage Terms", color: "#EF4444" },        // red
+  { text: "Manage Students", color: "#3B82F6" },     // blue
+  { text: "Generate QRs", color: "#EAB308" },        // yellow
+  { text: "Manage Classes", color: "#22C55E" },      // green
+  { text: "Manage Users", color: "#FFFFFF" },       // white
+  { text: "Assign Students to Classes", color: "#EF4444" },
+  { text: "Set Attendance Time", color: "#3B82F6" },
+];
+
+function InfiniteMarquee() {
+  const translateX = React.useRef(new Animated.Value(0)).current;
+
+  // Approximate width of one item (adjust if needed)
+  const ITEM_WIDTH = 180; 
+  const totalWidth = marqueeItems.length * ITEM_WIDTH;
+
+  React.useEffect(() => {
+  let loop: Animated.CompositeAnimation | null = null;
+
+  const start = () => {
+    loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(translateX, {
+          toValue: -totalWidth,
+          duration: 20000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(translateX, {
+          toValue: 0,
+          duration: 0,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+
+    loop.start();
+  };
+
+  // Delay start until UI thread is ready
+  const timer = setTimeout(start, 500);
+
+  return () => {
+    clearTimeout(timer);
+    loop?.stop();
+  };
+}, []);
+
+  return (
+    <View className="overflow-hidden bg-[#0B1C33] rounded-xl py-2 mb-4">
+      <Animated.View
+        style={{
+          flexDirection: "row",
+          transform: [{ translateX }],
+        }}
+      >
+        {[...marqueeItems, ...marqueeItems].map((item, index) => (
+          <View
+            key={index}
+            className="px-4 py-1 mr-3 rounded-full"
+            style={{ backgroundColor: "rgba(255,255,255,0.08)" }}
+          >
+            <Text style={{ color: item.color }} className="font-semibold text-sm">
+              {item.text}
+            </Text>
+          </View>
+        ))}
+      </Animated.View>
+    </View>
+  );
+}
+
 
   const isAdmin = Boolean(userDoc?.role === "admin");
 
@@ -57,36 +134,33 @@ const [classesExpanded, setClassesExpanded] = React.useState(false);
     let mounted = true;
 
     async function loadCounts() {
-      setLoadingCounts(true);
-      setLoadingClasses(true);
+  setLoadingCounts(true);
+  setLoadingClasses(true);
 
-      try {
-        const [terms, clsList, students, weeks] = await Promise.all([
-          listTerms().catch(() => []),
-          listClasses().catch(() => []),
-          listStudents().catch(() => []),
-          listWeeks().catch(() => []),
-        ]);
+  try {
+    const terms = await listTerms().catch(() => []);
+    const weeks = await listWeeks().catch(() => []);
+    const clsList = await listClasses().catch(() => []);
+    const students = await listStudents().catch(() => []);
 
-        if (!mounted) return;
+    if (!mounted) return;
 
-        setTermsCount(Array.isArray(terms) ? terms.length : null);
-        setWeeksCount(Array.isArray(weeks) ? weeks.length : null);
-        setClassesCount(Array.isArray(clsList) ? clsList.length : null);
-        setStudentsCount(Array.isArray(students) ? students.length : null);
+    setTermsCount(terms.length);
+    setWeeksCount(weeks.length);
+    setClassesCount(clsList.length);
+    setStudentsCount(students.length);
+    setClasses(clsList as Class[]);
+  } catch (err) {
+    console.error("loadCounts error:", err);
+  } finally {
+  if (mounted) {
+    setLoadingCounts(false);
+    setLoadingClasses(false);
+    setPageReady(true); // ✅ Add this line
+  }
+}
+}
 
-        if (Array.isArray(clsList)) {
-          setClasses(clsList as Class[]);
-        }
-      } catch (err) {
-        console.error("loadCounts error:", err);
-      } finally {
-        if (mounted) {
-          setLoadingCounts(false);
-          setLoadingClasses(false);
-        }
-      }
-    }
 
     loadCounts();
     return () => {
@@ -105,7 +179,7 @@ const [classesExpanded, setClassesExpanded] = React.useState(false);
   generateQRs: "bg-violet-100",
   manageUsers: "bg-rose-100",
   manageParents: "bg-teal-100",
-  adminLogs: "bg-slate-200", // ✅ NEW
+ 
 };
 
 const quickSetupHeadingColors = {
@@ -115,7 +189,7 @@ const quickSetupHeadingColors = {
   generateQRs: "text-violet-800",
   manageUsers: "text-rose-800",
   manageParents: "text-teal-800",
-  adminLogs: "text-slate-800", // ✅ NEW
+
 };
 
 const quickSetupIcons = {
@@ -125,18 +199,28 @@ const quickSetupIcons = {
   generateQRs: "qr-code",
   manageUsers: "people",
   manageParents: "family-restroom",
-  adminLogs: "history", // ✅ NEW
+
 };
 
 
+// ---------------------- After all useState/useEffect ----------------------
 if (userDocLoading || userDoc === undefined) {
+  return <ActivityIndicator />;
+}
+
+// ✅ Add this just below it
+if (!pageReady) {
   return (
-    <ActivityIndicator />
+    <View className="flex-1 items-center justify-center bg-slate-500">
+      <ActivityIndicator size="large" />
+      <Text className="mt-3 text-white">Loading admin dashboard...</Text>
+    </View>
   );
 }
 
+
 return (
-  <View className="flex-1 bg-slate-300">
+  <View className="flex-1 bg-slate-500">
     {/* ================= ADMIN HEADER ================= */}
     <View className="bg-[#0B1C33] px-6 pt-3 pb-4 border-b border-blue-900/40 shadow-md">
       <View className="flex-row items-center mb-2">
@@ -167,11 +251,14 @@ return (
       </View>
     </View>
 
-    {/* ================= CONTENT ================= */}
-    <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-      <View className="p-4 space-y-4">
-        {/* ================= QUICK SETUP ================= */}
-        <Text className="text-lg font-semibold">Quick setup</Text>
+   <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+  <View className="p-4 space-y-4">
+    {/* ================= INFINITE MOTION TEXT ================= */}
+    <InfiniteMarquee />
+
+    {/* ================= QUICK SETUP ================= */}
+    <Text className="text-lg font-semibold">Quick setup</Text>
+
 
         {/* Manage Terms */}
         <Pressable
@@ -305,47 +392,24 @@ return (
                 Manage Users
               </Text>
               <Text className="text-sm text-neutral mt-1">
-                Assign roles & edit users
+                Assign wards, roles & edit users
               </Text>
             </View>
           </View>
           <MaterialIcons name="chevron-right" size={20} color="#64748B" />
         </Pressable>
 
-        {/* Manage Parents */}
-        <Pressable
-          onPress={() => router.push("/users?role=parent")}
-          className={`rounded-2xl p-4 shadow flex-row items-center justify-between ${quickSetupColors.manageParents}`}
-        >
-          <View className="flex-row items-center space-x-3">
-            <View className="p-2 rounded-full bg-white/60">
-              <MaterialIcons
-                name={quickSetupIcons.manageParents as any}
-                size={20}
-                color="#1E293B"
-              />
-            </View>
-            <View>
-              <Text className={`font-semibold ${quickSetupHeadingColors.manageParents}`}>
-                Manage Parents & Wards
-              </Text>
-              <Text className="text-sm text-neutral mt-1">
-                Assign students to parents
-              </Text>
-            </View>
-          </View>
-          <MaterialIcons name="chevron-right" size={20} color="#64748B" />
-        </Pressable>
-
-       {/* ================= CLASSES (Expandable) ================= */}
+      {/* ================= CLASSES (Expandable) ================= */}
 <Pressable
   onPress={() => setClassesExpanded((v) => !v)}
-  className="rounded-2xl p-4 shadow bg-emerald-50 flex-row items-center justify-between mt-6"
+  className="rounded-2xl p-4 shadow bg-emerald-50 flex-row items-center justify-between "
 >
   <View className="flex-row items-center space-x-3">
     <View className="p-2 rounded-full bg-white/70">
-      <MaterialIcons name="library-books" size={22} color="#065F46" />
+      {/* Changed icon here */}
+      <MaterialIcons name="group-add" size={22} color="#065F46" />
     </View>
+
     <View>
       <Text className="font-semibold text-emerald-800">
         Assign Students to Classes
@@ -356,12 +420,14 @@ return (
     </View>
   </View>
 
+ 
   <MaterialIcons
     name={classesExpanded ? "expand-less" : "expand-more"}
     size={24}
     color="#065F46"
   />
 </Pressable>
+
 {classesExpanded && (
   <View className="mt-2 space-y-2">
     {loadingClasses ? (
@@ -381,6 +447,7 @@ return (
             <Text className="font-semibold text-dark">
               {cls.name}
             </Text>
+
             {!!cls.description && (
               <Text className="text-sm text-neutral mt-1">
                 {cls.description}

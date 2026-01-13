@@ -22,6 +22,7 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/app/firebase";
 import type { Student } from "@/src/services/types";
 import { MaterialIcons } from "@expo/vector-icons";
+import AppInput from "@/components/AppInput";
 
 type WardInfo = {
   wardId: string;
@@ -210,12 +211,13 @@ export default function AdminParentWards() {
       </View>
 
       <View className="bg-white rounded-xl px-3 py-2 mb-3">
-        <TextInput
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Search student by name or roll number"
-          className="text-base"
-        />
+       <AppInput
+  value={search}
+  onChangeText={setSearch}
+  placeholder="Search student by name or roll number"
+  className="text-base"
+/>
+
       </View>
 
       <FlatList

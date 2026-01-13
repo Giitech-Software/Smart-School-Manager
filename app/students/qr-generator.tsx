@@ -3,7 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   FlatList,
   ActivityIndicator,
@@ -23,6 +22,7 @@ import { generateQrPayload } from "../../src/services/qr";
 import type { Student } from "../../src/services/types";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AppInput from "@/components/AppInput";
 
 /* ---------- small helpers ---------- */
 function escapeHtml(str: string) {
@@ -429,12 +429,13 @@ const router = useRouter();
 
       </View>
 
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        placeholder="Search by name, roll or id"
-        className="border rounded px-3 py-2 bg-white mb-4"
-      />
+      <AppInput
+  value={query}
+  onChangeText={setQuery}
+  placeholder="Search by name, roll or id"
+  className="border rounded px-3 py-2 bg-white mb-4"
+  autoCorrect={false}
+/>
 
       {loading ? (
         <View className="flex-1 items-center justify-center"><ActivityIndicator /></View>

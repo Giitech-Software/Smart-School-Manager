@@ -12,3 +12,14 @@ export function getMonthRange(year: number, monthIndex: number) {
     label: from.toLocaleString("default", { month: "long", year: "numeric" }),
   };
 }
+// utils/dateRanges.ts
+export function intersectRanges(
+  aFrom: string,
+  aTo: string,
+  bFrom: string,
+  bTo: string
+) {
+  const from = aFrom > bFrom ? aFrom : bFrom;
+  const to   = aTo   < bTo   ? aTo   : bTo;
+  return from <= to ? { fromIso: from, toIso: to } : null;
+}

@@ -8,13 +8,13 @@ import {
   Alert,
   ScrollView,
   Platform,
+    Image,   // ✅ add this
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect, Link } from "expo-router";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth as firebaseAuth } from "./firebase";
 import { signOutUser } from "../src/services/auth";
-import Avatar from "../components/Avatar";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons, Entypo } from "@expo/vector-icons";
 import useCurrentUser from "../src/hooks/useCurrentUser";
@@ -107,52 +107,60 @@ export default function Home(): JSX.Element {
   const isAdmin = Boolean(userDoc?.role === "admin");
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-300">
-      {/* Header with gradient */}
-      <LinearGradient
-  colors={["#1E3A8A", "#0EA5E9"]}
-  className="px-6 pt-8 pb-2"
-  start={{ x: 0, y: 0 }}
-  end={{ x: 0, y: 1 }}
+   <SafeAreaView
+  className="flex-1 bg-blue-900"
+  edges={["left", "right", "bottom"]}   // 🚫 no top padding
 >
 
-        <View className="flex-row items-center justify-between">
-          <View>
-            <Text className="text-2xl font-extrabold text-white">
-              ASTEM Attendance Register
-            </Text>
-            <Text className="text-m text-white/90 mt-1">
-              Manage check-in/out & reports
-            </Text>
-          </View>
 
-          <View className="flex-row items-center space-x-3">
-            <Avatar email={user?.email} size={52} />
-          </View>
-        </View>
+ {/* Subtitle / Action Banner (NOT a header) */}
+<View style={{ backgroundColor: '#1e293b' }} className="px-6 py-2">
 
-        {/* Action pill */}
-        <View className="mt-4 flex-row items-center justify-between">
-          <View className="flex-row items-center space-x-3">
-            <View className="bg-white/20 rounded-full px-3 py-2 flex-row items-center">
-              <MaterialIcons name="qr-code-scanner" size={18} color="#fff" />
-              <Text className="text-white ml-2">QR Check-in/out</Text>
-            </View>
-            <View className="bg-white/20 rounded-full px-3 py-2 flex-row items-center">
-              <Entypo name="fingerprint" size={18} color="#fff" />
-              <Text className="text-white ml-2">Biometric</Text>
-            </View>
-          </View>
+  <View className="flex-row items-center justify-between">
+    <View className="flex-1 pr-2">
+      <Text
+        className="text-lg font-semibold text-white"
+        style={{ includeFontPadding: false }}
+      >
+        Manage check-in • check-out • reports
+      </Text>
+    </View>
+  </View>
 
-          <Pressable
-            onPress={() => router.push("/attendance/checkin")}
-            className="bg-white py-2 px-4 rounded-full shadow"
-            style={{ minWidth: 110, alignItems: "center" }}
-          >
-            <Text className="text-primary font-semibold">Start</Text>
-          </Pressable>
-        </View>
-      </LinearGradient>
+  {/* Action row */}
+  <View className="mt-4 flex-row items-center justify-between">
+    <View className="flex-row items-center space-x-3">
+      <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
+        <MaterialIcons name="qr-code-scanner" size={16} color="#FFFFFF" />
+        <Text className="text-white ml-2 text-m">QR</Text>
+      </View>
+
+      <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
+        <Entypo name="fingerprint" size={16} color="#FFFFFF" />
+        <Text className="text-white ml-2 text-m">Biometric</Text>
+      </View>
+    </View>
+
+    <Pressable
+      onPress={() => router.push("/attendance/checkin")}
+      className="bg-yellow-400 px-4 py-2 rounded-full"
+    >
+      <Text className="text-blue-900 font-bold">Start</Text>
+    </Pressable>
+  </View>
+</View>
+{/* Hero Image */}
+<View className="bg-white">
+  <Image
+    source={require("../assets/images/how-it-works2.jpg")}
+    style={{ width: "100%", height: 130 }}
+    resizeMode="stretch"
+  />
+</View>
+
+
+
+
 
       {/* 🌟 Welcome Popup */}
       {showWelcome && (
@@ -204,23 +212,12 @@ export default function Home(): JSX.Element {
                 <Text className="font-semibold text-dark">Scan QR</Text>
                 <Text className="text-sm text-neutral mt-1">
                   Fast student check-in/out
-                </Text>
+                </Text> 
               </View>
             </Pressable>
           </Link>
 
-          <Link href="/students" asChild>
-            <Pressable className="bg-white rounded-2xl p-4 shadow flex-row items-center">
-              <View className="p-3 rounded-lg bg-accent2/10 mr-3">
-                <Entypo name="users" size={22} color="#10B981" />
-              </View>
-              <View>
-                <Text className="font-semibold text-dark">Students</Text>
-                <Text className="text-sm text-neutral mt-1">Manage roster</Text>
-              </View>
-            </Pressable>
-          </Link>
-
+        
           <Link href="/reports" asChild>
             <Pressable className="bg-white rounded-2xl p-4 shadow flex-row items-center">
               <View className="p-3 rounded-lg bg-secondary/10 mr-3">
@@ -229,7 +226,7 @@ export default function Home(): JSX.Element {
               <View>
                 <Text className="font-semibold text-dark">Reports</Text>
                 <Text className="text-sm text-neutral mt-1">
-                  Weekly / Monthly / Term
+                Daily • Weekly •  Monthly •  Termly
                 </Text>
               </View>
             </Pressable>

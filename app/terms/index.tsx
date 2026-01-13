@@ -1,5 +1,4 @@
-// mobile/app/terms/index.tsx
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +7,7 @@ import {
   Pressable,
   Alert,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { listTerms, deleteTerm } from "../../src/services/terms";
 import { MaterialIcons } from "@expo/vector-icons";
 
@@ -16,13 +15,10 @@ export default function TermsList() {
   const router = useRouter();
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    load();
-  }, []);
-
-  async function load() {
-    setLoading(true);
+  const load = async (isRefresh = false) => {
+    if (!isRefresh) setLoading(true);
     try {
       const d = await listTerms();
       setItems(d || []);
@@ -31,8 +27,21 @@ export default function TermsList() {
       Alert.alert("Failed to load terms", err?.message ?? String(err));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  };
+
+  /** 🔁 Auto-refresh whenever screen gains focus */
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [])
+  );
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    load(true);
+  };
 
   function confirmDelete(id: string, name: string) {
     Alert.alert(
@@ -70,23 +79,14 @@ export default function TermsList() {
     <View className="flex-1 bg-slate-50 p-4">
       {/* HEADER */}
       <View className="flex-row items-center justify-between mb-4">
-        <View className="flex-row items-center mb-2">
-  <Pressable
-    onPress={() => router.back()}
-    className="p-1 mr-2"
-    hitSlop={8}
-  >
-    <MaterialIcons
-      name="arrow-back"
-      size={26}
-      color="#0f172a"
-    />
-  </Pressable>
-
-  <Text className="text-2xl font-extrabold text-slate-900">
-   Terms
-  </Text>
-</View>
+        <View className="flex-row items-center">
+          <Pressable onPress={() => router.back()} className="p-1 mr-2">
+            <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
+          </Pressable>
+          <Text className="text-2xl font-extrabold text-slate-900">
+            Terms
+          </Text>
+        </View>
 
         <Pressable
           onPress={() => router.push("/terms/create")}
@@ -100,6 +100,8 @@ export default function TermsList() {
       <FlatList
         data={items}
         keyExtractor={(i) => i.id}
+        refreshing={refreshing}
+        onRefresh={onRefresh}
         renderItem={({ item }) => (
           <View className="bg-white rounded-2xl p-4 mb-3 shadow flex-row justify-between items-center">
             <View>
@@ -112,21 +114,18 @@ export default function TermsList() {
             </View>
 
             <View className="flex-row space-x-3">
-              {/* EDIT */}
               <Pressable
-               onPress={() =>
-  router.push({
-    pathname: "/terms/[id]",
-    params: { id: item.id },
-  })
-}
-
+                onPress={() =>
+                  router.push({
+                    pathname: "/terms/[id]",
+                    params: { id: item.id },
+                  })
+                }
                 className="px-3 py-1 rounded bg-slate-100"
               >
                 <Text className="text-slate-700">Edit</Text>
               </Pressable>
 
-              {/* DELETE */}
               <Pressable
                 onPress={() => confirmDelete(item.id, item.name)}
                 className="px-3 py-1 rounded bg-red-100"

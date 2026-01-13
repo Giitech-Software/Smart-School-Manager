@@ -8,6 +8,7 @@ import {
   query,
   orderBy,
   serverTimestamp,
+  updateDoc
 } from "firebase/firestore";
 import { db } from "../../app/firebase";
 import { type UserRole } from "./constants/roles";
@@ -15,17 +16,32 @@ import { type UserRole } from "./constants/roles";
 /* ---------------- Types ---------------- */
 
 
+export async function updateUserApproval(
+  uid: string,
+  approved: boolean
+) {
+  const ref = doc(db, "users", uid);
+  await updateDoc(ref, {
+    approved,
+  });
+}
+
+
 export type AppUser = {
   id?: string;
   uid?: string;
   displayName?: string | null;
-  role?: UserRole | null; // ✅ now recognized
+  role?: UserRole | null;
   email?: string | null;
   createdAt?: any;
   wards?: string[];
-  
+
+  // 🔐 NEW — authorization fields
+  approved?: boolean;
+  canTakeStaffAttendance?: boolean;
+  canTakeStudentAttendance?: boolean;
 };
- 
+
 const USERS_COLLECTION = "users";
 
 /* ---------------- List users ---------------- */
@@ -49,9 +65,12 @@ export async function listUsers(): Promise<AppUser[]> {
         role: data.role ?? null,
         email: data.email ?? null,
         createdAt: data.createdAt ?? Date.now(),
-
-        // ✅ SAFE DEFAULT
+        
+// ✅ SAFE DEFAULT
         wards: Array.isArray(data.wards) ? data.wards : [],
+        approved: Boolean(data.approved),
+        canTakeStaffAttendance: Boolean(data.canTakeStaffAttendance),
+        canTakeStudentAttendance: Boolean(data.canTakeStudentAttendance),
       } as AppUser;
     });
   } catch (err) {
@@ -59,6 +78,7 @@ export async function listUsers(): Promise<AppUser[]> {
     throw err;
   }
 }
+
 
 /* ---------------- Get user by ID ---------------- */
 
@@ -71,21 +91,25 @@ export async function getUserById(id: string): Promise<AppUser | null> {
     const data = snap.data() as any;
 
     return {
-      id: snap.id,                 // ✅ DocumentSnapshot HAS id
+      id: snap.id,
       uid: data.uid ?? snap.id,
       displayName: data.displayName ?? null,
       role: data.role ?? null,
       email: data.email ?? null,
       createdAt: data.createdAt ?? Date.now(),
 
-      // ✅ SAFE DEFAULT
+      // SAFE DEFAULTS
       wards: Array.isArray(data.wards) ? data.wards : [],
+      approved: Boolean(data.approved),
+      canTakeStaffAttendance: Boolean(data.canTakeStaffAttendance),
+      canTakeStudentAttendance: Boolean(data.canTakeStudentAttendance),
     } as AppUser;
   } catch (err) {
     console.error("getUserById error:", err);
     throw err;
   }
 }
+ 
 
 /* ---------------- Upsert user ---------------- */
 
@@ -101,22 +125,28 @@ export async function upsertUser(user: AppUser): Promise<string> {
 
     const ref = doc(db, USERS_COLLECTION, user.id);
 
-    await setDoc(
-      ref,
-      {
-        uid: user.id,
-        displayName: user.displayName ?? null,
-        email: user.email ?? null,
-        role: user.role === "admin" ? "teacher" : user.role ?? "teacher",
+   await setDoc(
+  ref,
+  {
+    uid: user.id,
+    displayName: user.displayName ?? null,
+    email: user.email ?? null,
+
+    // 🚫 Never allow admin at signup
+   role: user.role ?? "teacher",
 
 
-        // ✅ NEW (merge-safe)
-        wards: user.wards ?? [],
+    // 🔐 SECURITY FLAGS (merge-safe)
+    approved: user.approved ?? false,
+    canTakeStaffAttendance: user.canTakeStaffAttendance ?? false,
+    canTakeStudentAttendance: user.canTakeStudentAttendance ?? false,
 
-        createdAt: user.createdAt ?? serverTimestamp(),
-      },
-      { merge: true }
-    );
+    wards: user.wards ?? [],
+    createdAt: user.createdAt ?? serverTimestamp(),
+  },
+  { merge: true }
+);
+
 
     return user.id;
   } catch (err) {

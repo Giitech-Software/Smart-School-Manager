@@ -1,5 +1,6 @@
 // mobile/app/(auth)/login.tsx
 import React, {useState} from "react";
+import AppInput from "@/components/AppInput";
 
 import {
   View,
@@ -53,11 +54,22 @@ export default function Login() {
     const user = await getUserById(cred.user.uid);
     if (!user) throw new Error("User profile not found");
 
-    if (user.role === "parent" || (user.wards?.length ?? 0) > 0) {
-      router.replace("/wards");
-    } else {
-      router.replace("/");
-    }
+  // 🔐 Approval gate (role-aware)
+if (user.role !== "admin" && user.approved !== true) {
+  router.replace("/(auth)/pending-approval");
+  return;
+}
+
+
+
+
+// ✅ Existing role-based logic (unchanged)
+if (user.role === "parent" || (user.wards?.length ?? 0) > 0) {
+  router.replace("/wards");
+} else {
+  router.replace("/");
+}
+
  } catch (err: any) {
   const code = err?.code ?? "";
 
@@ -106,27 +118,26 @@ export default function Login() {
 
           {/* Email */}
           <Text className="text-m text-slate-600 mb-1">Email</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            className="border p-3 rounded mb-3"
-            textContentType="emailAddress"
-          />
+          <AppInput
+  value={email}
+  onChangeText={setEmail}
+  placeholder="you@example.com"
+  keyboardType="email-address"
+  className="border p-3 rounded mb-3 bg-white"
+/>
+
 
           {/* Password */}
           <Text className="text-m text-slate-600 mb-1">Password</Text>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Your password"
-            secureTextEntry={!showPassword}
-            className="border p-3 rounded mb-1"
-            textContentType="password"
-            onSubmitEditing={handleLogin}
-          />
+         <AppInput
+  value={password}
+  onChangeText={setPassword}
+  placeholder="Your password"
+  secureTextEntry={!showPassword}
+  className="border p-3 rounded mb-1 bg-white"
+  onSubmitEditing={handleLogin}
+/>
+ 
 
           {/* Show / Hide password */}
           <Pressable onPress={() => setShowPassword(!showPassword)}>

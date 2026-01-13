@@ -6,10 +6,12 @@ import {
   Pressable,
   ScrollView,
   Alert,
+    Image,   // ✅ add this
 } from "react-native";
 import { useRouter } from "expo-router";
 import { getAttendanceSummary } from "../../src/services/attendanceSummary";
 import { MaterialIcons } from "@expo/vector-icons";
+
 export default function ReportsDashboard() {
   const router = useRouter();
 
@@ -112,17 +114,25 @@ export default function ReportsDashboard() {
     />
   </Pressable>
 
+
   <Text className="text-2xl font-extrabold text-slate-900">
     Reports
   </Text>
 </View>
-
-<Text className="text-sm text-slate-500 mb-6">
+{/* Hero Image */}
+<View className="bg-white -mx-4">
+  <Image
+    source={require("../../assets/images/attendance-report.jpg")}
+    style={{ width: "100%", height: 140 }}
+    resizeMode="stretch"
+  />
+</View>
+<Text className="text-ml text-yellow-800 mt-4">
   Quick previews — tap a tile to open detailed reports
 </Text>
 
 
-      <View className="mt-6">
+      <View className="mt-2">
         <Tile
           title="Daily Attendance"
           subtitle="Preview by day • Last 5 school days"
@@ -150,31 +160,42 @@ export default function ReportsDashboard() {
       </View>
 
       {/* -------------------- PREVIEW SUMMARY -------------------- */}
-      <View className="mt-6 p-4 bg-white rounded-xl shadow-sm">
-        <Text className="text-sm font-semibold text-slate-700">
-          Last 5 school days (preview)
-        </Text>
-        <View className="mt-3 flex-row justify-between">
-          <View>
-            <Text className="text-xs text-slate-500">Present</Text>
-            <Text className="text-lg font-bold text-emerald-600">
-              {totals.present}
-            </Text>
-          </View>
-          <View>
-            <Text className="text-xs text-slate-500">Absent</Text>
-            <Text className="text-lg font-bold text-red-500">
-              {totals.absent}
-            </Text>
-          </View>
-          <View>
-            <Text className="text-xs text-slate-500">Attendance %</Text>
-            <Text className="text-lg font-bold text-slate-900">
-              {totals.pct.toFixed(1)}%
-            </Text>
-          </View>
-        </View>
-      </View>
+     <View className="mt-6 p-4 bg-white rounded-xl shadow-sm">
+  <Text className="text-sm font-semibold text-slate-700">
+    Last 5 school days (preview)
+  </Text>
+
+  <View className="mt-3 flex-row justify-between">
+    <View>
+      <Text className="text-xs text-slate-500">Present</Text>
+      <Text className="text-lg font-bold text-emerald-600">
+        {totals.present}
+      </Text>
+    </View>
+
+    <View>
+      <Text className="text-xs text-slate-500">Absent</Text>
+      <Text className="text-lg font-bold text-red-500">
+        {totals.absent}
+      </Text>
+    </View>
+
+    {/* ✅ NEW — LATE SUMMARY */}
+    <View>
+      <Text className="text-xs text-slate-500">Late</Text>
+      <Text className="text-lg font-bold text-amber-600">
+        {totals.late}
+      </Text>
+    </View>
+
+    <View>
+      <Text className="text-xs text-slate-500">Attendance %</Text>
+      <Text className="text-lg font-bold text-slate-900">
+        {totals.pct.toFixed(1)}%
+      </Text>
+    </View>
+  </View>
+</View>
     </ScrollView>
   );
 }

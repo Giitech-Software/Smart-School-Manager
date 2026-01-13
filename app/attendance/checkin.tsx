@@ -6,6 +6,7 @@ import {
   Alert,
   ActivityIndicator,
   FlatList,
+   Image,   // ✅ add this
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as LocalAuthentication from "expo-local-authentication";
@@ -17,6 +18,27 @@ import * as SecureStore from "expo-secure-store";
 import { getStudentById } from "../../src/services/students";
 import { biometricKeyForStudent } from "../../src/services/secureKeys";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { db } from "../../app/firebase"; // adjust path if needed
+/* ------------------------- Attendance Restrictions ------------------------- */
+function isAttendanceAllowed(): { allowed: boolean; reason?: string } {
+  const today = new Date();
+  const day = today.getDay(); // 0 = Sunday, 6 = Saturday
+
+  // Weekends
+  if (day === 0) return { allowed: false, reason: "Today is Sunday. Attendance is not allowed." };
+  if (day === 6) return { allowed: false, reason: "Today is Saturday. Attendance is not allowed." };
+
+  // Holidays / vacations (ISO date strings)
+  const holidays = ["2026-01-01", "2026-04-15", "2026-12-25"]; // extend as needed
+  const todayISO = today.toISOString().slice(0, 10);
+
+  if (holidays.includes(todayISO)) {
+    return { allowed: false, reason: "Today is a holiday. Attendance is not allowed." };
+  }
+
+  return { allowed: true };
+}
 
 /* ------------------------- Student Row ------------------------- */
 function StudentRow({
@@ -101,11 +123,39 @@ export default function CheckinScreen() {
     loadClasses();
   }, []);
 
-  /* Load students when class changes */
-  useEffect(() => {
-    if (selectedClassId) loadStudents(selectedClassId);
-    else setStudents([]);
-  }, [selectedClassId]);
+  //////* Load students when class changes */
+ /* Load students reactively when class changes */
+useEffect(() => {
+  if (!selectedClassId) {
+    setStudents([]);
+    return;
+  }
+
+  const q = query(
+    collection(db, "students"),
+    where("classId", "==", selectedClassId)
+  );
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const studentsInClass = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as StudentRecord[];
+
+      setStudents(studentsInClass);
+    },
+    (err) => {
+      console.error("students snapshot error", err);
+      Alert.alert("Failed to load students", err?.message ?? String(err));
+      setStudents([]);
+    }
+  );
+
+  return () => unsubscribe();
+}, [selectedClassId]);
+
 
   async function loadClasses() {
     setClassesLoading(true);
@@ -124,18 +174,13 @@ export default function CheckinScreen() {
     }
   }
 
-  async function loadStudents(classId: string) {
-    try {
-      const data = await listStudents(classId);
-      setStudents(data);
-    } catch (err: any) {
-      console.error("listStudents", err);
-      Alert.alert("Failed to load students", err?.message ?? String(err));
-      setStudents([]);
-    }
-  }
-
   async function tryFingerprint(studentId: string, checkType: "in" | "out") {
+    const attendanceCheck = isAttendanceAllowed();
+if (!attendanceCheck.allowed) {
+  Alert.alert("Attendance not allowed", attendanceCheck.reason);
+  return;
+}
+
     if (!selectedClassId) {
       Alert.alert("Select class", "Please select a class before recording attendance.");
       return;
@@ -189,6 +234,12 @@ export default function CheckinScreen() {
   }
 
   function goToQR(mode?: "in" | "out") {
+    const attendanceCheck = isAttendanceAllowed();
+if (!attendanceCheck.allowed) {
+  Alert.alert("Attendance not allowed", attendanceCheck.reason);
+  return;
+}
+
     if (!selectedClassId) {
       Alert.alert("Select class first");
       return;
@@ -221,9 +272,29 @@ export default function CheckinScreen() {
     );
   }
 
-  function renderListHeader() {
-    return (
-      <>
+ function renderListHeader() {
+  const attendanceCheck = isAttendanceAllowed(); // ✅ declare here, outside JSX
+
+  return (
+    <>
+      {/* Banner if attendance blocked */}
+      {!attendanceCheck.allowed && (
+        <View className="bg-yellow-100 p-4 rounded-lg mb-4 mx-4">
+          <Text className="text-yellow-800 font-semibold text-center">
+            {attendanceCheck.reason}
+          </Text>
+        </View>
+      )}
+
+
+      {/* Hero Image */}
+<View className="bg-white -mx-4">
+   <Image
+  source={require("../../assets/images/how-it-works.jpg")}
+  style={{ width: "100%", height: 130 }}
+  resizeMode="stretch"
+/>
+</View>
         {/* Class Picker */}
         <View className="mb-4">
           <Text className="text-m text-bold mb-2">Choose class</Text>
@@ -292,26 +363,30 @@ export default function CheckinScreen() {
           <MaterialIcons name="arrow-forward-ios" size={16} color="#64748B" />
         </Pressable>
 
-        {/* How it works - hide if biometric expanded */}
-        {!showBiometric && (
-          <View className="mt-8 bg-white rounded-2xl p-4 shadow">
-            <Text className="font-semibold text-dark text-base mb-2">How it works</Text>
-            <View className="space-y-3">
-              <View className="flex-row items-center">
-                <MaterialIcons name="check-circle" size={20} color="#10B981" />
-                <Text className="ml-3 text-neutral">Scan QR or fingerprint for check-in.</Text>
-              </View>
-              <View className="flex-row items-center">
-                <MaterialIcons name="check-circle" size={20} color="#10B981" />
-                <Text className="ml-3 text-neutral">Scan QR or fingerprint for check-out.</Text>
-              </View>
-              <View className="flex-row items-center">
-                <MaterialIcons name="check-circle" size={20} color="#10B981" />
-                <Text className="ml-3 text-neutral">Attendance is logged automatically.</Text>
-              </View>
-            </View>
-          </View>
-        )}
+       {/* How it works - hide if biometric expanded */}
+{!showBiometric && (
+  <View className="mt-8 bg-white rounded-2xl p-4 shadow">
+    <Text className="font-semibold text-dark text-base mb-2">How it works</Text>
+
+    <View className="space-y-3 mb-4">
+      <View className="flex-row items-center">
+        <MaterialIcons name="check-circle" size={20} color="#10B981" />
+        <Text className="ml-3 text-neutral">Scan QR or fingerprint for check-in.</Text>
+      </View>
+      <View className="flex-row items-center">
+        <MaterialIcons name="check-circle" size={20} color="#10B981" />
+        <Text className="ml-3 text-neutral">Scan QR or fingerprint for check-out.</Text>
+      </View>
+      <View className="flex-row items-center">
+        <MaterialIcons name="check-circle" size={20} color="#10B981" />
+        <Text className="ml-3 text-neutral">Attendance is logged automatically.</Text>
+      </View>
+    </View>
+
+
+  </View>
+)}
+
 
         <View style={{ height: 20 }} />
       </>

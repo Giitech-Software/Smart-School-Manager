@@ -11,14 +11,40 @@ import {
 import { db } from "../../app/firebase";
 
 /* =========================
-   LIST WEEKS
+   LIST WEEKS (LEGACY SAFE)
 ========================= */
 export async function listWeeks(termId?: string): Promise<any[]> {
   const ref = collection(db, "weeks");
 
-  const q = termId
-    ? query(ref, where("termId", "==", termId), orderBy("weekNumber"))
-    : query(ref, orderBy("termId"), orderBy("weekNumber"));
+  let q;
+
+  if (termId) {
+    q = query(
+      ref,
+      where("termId", "==", termId),
+      orderBy("weekNumber")
+    );
+  } else {
+    // legacy fallback (do NOT mix terms)
+    q = query(ref, orderBy("createdAt", "desc"));
+  }
+
+  const snap = await getDocs(q);
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
+/* =========================
+   LIST WEEKS FOR TERM (STRICT)
+========================= */
+export async function listWeeksForTerm(termId: string): Promise<any[]> {
+  if (!termId) return [];
+
+  const ref = collection(db, "weeks");
+  const q = query(
+    ref,
+    where("termId", "==", termId),
+    orderBy("weekNumber")
+  );
 
   const snap = await getDocs(q);
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -47,7 +73,6 @@ export async function autoGenerateWeeksForTerm(
   startDate: string,
   endDate: string
 ): Promise<number> {
-  // 1️⃣ Remove old weeks
   await deleteWeeksForTerm(termId);
 
   const start = new Date(startDate);
@@ -66,7 +91,7 @@ export async function autoGenerateWeeksForTerm(
   while (current <= end) {
     const weekStart = new Date(current);
     const weekEnd = new Date(current);
-    weekEnd.setDate(weekEnd.getDate() + 4); // Mon–Fri
+    weekEnd.setDate(weekEnd.getDate() + 4);
 
     if (weekEnd > end) {
       weekEnd.setTime(end.getTime());
@@ -87,3 +112,4 @@ export async function autoGenerateWeeksForTerm(
 
   return created;
 }
+ 

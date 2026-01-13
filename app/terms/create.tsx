@@ -6,6 +6,7 @@ import { createTerm } from "../../src/services/terms";
 import type { Term } from "../../src/services/types";
 import { autoGenerateWeeksForTerm } from "../../src/services/weeks";
 import { MaterialIcons } from "@expo/vector-icons";
+import AppInput from "@/components/AppInput";
 
 export default function TermCreate() {
   const router = useRouter();
@@ -67,28 +68,32 @@ export default function TermCreate() {
   </Text>
 </View>
 
-      <Text className="text-m text-neutral">Name</Text>
-      <TextInput
-        value={name}
-        onChangeText={setName}
-        className="border p-3 rounded mb-3 bg-white"
-      />
+     <Text className="text-sm text-neutral">Name</Text>
+<AppInput
+  value={name}
+  onChangeText={setName}
+  className="border p-3 rounded mb-3 bg-white"
+  placeholder="e.g. Term 2"
+/>
 
-      <Text className="text-m text-neutral">Start date (YYYY-MM-DD)</Text>
-      <TextInput
-        value={startDate}
-        onChangeText={setStartDate}
-        className="border p-3 rounded mb-3 bg-white"
-        placeholder="2025-01-10"
-      />
+<Text className="text-sm text-neutral">Start date (YYYY-MM-DD)</Text>
+<AppInput
+  value={startDate}
+  onChangeText={setStartDate}
+  className="border p-3 rounded mb-3 bg-white"
+  placeholder="2025-01-10"
+  keyboardType="numeric"
+/>
 
-      <Text className="text-m text-neutral">End date (YYYY-MM-DD)</Text>
-      <TextInput
-        value={endDate}
-        onChangeText={setEndDate}
-        className="border p-3 rounded mb-4 bg-white"
-        placeholder="2025-04-10"
-      />
+<Text className="text-sm text-neutral">End date (YYYY-MM-DD)</Text>
+<AppInput
+  value={endDate}
+  onChangeText={setEndDate}
+  className="border p-3 rounded mb-4 bg-white"
+  placeholder="2025-04-10"
+  keyboardType="numeric"
+/>
+
 
       <Pressable
         onPress={handleSave}

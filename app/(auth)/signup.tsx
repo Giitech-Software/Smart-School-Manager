@@ -20,10 +20,10 @@ import { upsertUser } from "../../src/services/users"; // optional, keep if you 
 import { updateProfile } from "firebase/auth"; // optional to update Firebase Auth displayName
 import { USER_ROLES, type UserRole } from "../../src/services/constants/roles";
 
-
-
 import { Picker } from "@react-native-picker/picker";
 
+import AppPicker from "@/components/AppPicker";
+import AppInput from "@/components/AppInput";
 function isValidEmail(email: string) {
   return /\S+@\S+\.\S+/.test(email);
 }
@@ -75,16 +75,23 @@ const safeRole: UserRole =
   role === "admin" ? "teacher" : role;
 
       // Create Firestore user profile
-     // Create Firestore user profile
+     
 try {
   if (typeof upsertUser === "function") {
-    await upsertUser({
-      id: credential.user.uid,
-      email: email.trim(),
-     role: safeRole, // ✅ selected role from UI
-      displayName: fullName.trim(),
-      createdAt: new Date(), // optional, safe
-    });
+   await upsertUser({
+  id: credential.user.uid,
+  email: email.trim(),
+  role: safeRole,                 // role is informational only
+  displayName: fullName.trim(),
+
+  // 🔐 HARD SECURITY DEFAULTS
+  approved: false,
+  canTakeStaffAttendance: false,
+  canTakeStudentAttendance: false,
+
+  createdAt: new Date(),
+});
+
   }
 } catch (e) {
   console.warn("upsertUser failed:", e);
@@ -135,64 +142,63 @@ try {
 
           {/* Full Name */}
           <Text className="text-m text-slate-600 mb-1">Full Name</Text>
-          <TextInput
-            value={fullName}
-            onChangeText={setFullName}
-            placeholder="Your full name"
-            className="border p-3 rounded mb-3"
-            textContentType="name"
-          />
+         <AppInput
+  value={fullName}
+  onChangeText={setFullName}
+  placeholder="Your full name"
+  className="border p-3 rounded mb-3 bg-white"
+/>
+
 {/* Role selection */}<Text className="text-m text-slate-600 mb-1">Register as</Text>
 <View className="border rounded mb-3 overflow-hidden">
-  <Picker
-    selectedValue={role}
-    onValueChange={(value) => setRole(value)}
-  >
-    <Picker.Item label="Parent" value="parent" />
-    <Picker.Item label="Teacher" value="teacher" />
-    <Picker.Item label="Non-Teaching Staff" value="non_teaching_staff" />
-    <Picker.Item label="Staff" value="staff" />
-  </Picker>
+<AppPicker
+  selectedValue={role}
+  onValueChange={(value) => setRole(value)}
+>
+  <Picker.Item label="Parent" value="parent" />
+  <Picker.Item label="Teacher" value="teacher" />
+  <Picker.Item label="Non-Teaching Staff" value="non_teaching_staff" />
+  <Picker.Item label="Staff" value="staff" />
+</AppPicker>
+
 </View>
 
 
 
           {/* Email */}
           <Text className="text-m text-slate-600 mb-1">Email</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            className="border p-3 rounded mb-3"
-            textContentType="emailAddress"
-          />
+          <AppInput
+  value={email}
+  onChangeText={setEmail}
+  placeholder="you@example.com"
+  keyboardType="email-address"
+  className="border p-3 rounded mb-3 bg-white"
+/>
+
 
           {/* Password */}
           <Text className="text-m text-slate-600 mb-1">Password</Text>
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Create a password"
-            secureTextEntry={!showPassword}
-            className="border p-3 rounded mb-2"
-            textContentType="password"
-          />
+         <AppInput
+  value={password}
+  onChangeText={setPassword}
+  placeholder="Create a password"
+  secureTextEntry={!showPassword}
+  className="border p-3 rounded mb-2 bg-white"
+/>
 
           {/* Confirm Password */}
           <Text className="text-m text-slate-600 mb-1">
             Confirm password
           </Text>
-          <TextInput
-            value={confirm}
-            onChangeText={setConfirm}
-            placeholder="Confirm password"
-            secureTextEntry={!showPassword}
-            className="border p-3 rounded mb-1"
-            textContentType="password"
-            onSubmitEditing={handleSignup}
-          />
+         <AppInput
+  value={confirm}
+  onChangeText={setConfirm}
+  placeholder="Confirm password"
+  secureTextEntry={!showPassword}
+  className="border p-3 rounded mb-1 bg-white"
+  onSubmitEditing={handleSignup}
+/>
+
 
           {/* Show / Hide password toggle */}
           <Pressable onPress={() => setShowPassword(!showPassword)}>

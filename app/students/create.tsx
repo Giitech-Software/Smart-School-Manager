@@ -14,6 +14,8 @@ import KeyboardAwareScreen from "@/components/KeyboardAwareScreen";
 import { createStudent } from "../../src/services/students";
 import { listClasses, type ClassRecord } from "../../src/services/classes";
 import { MaterialIcons } from "@expo/vector-icons";
+import AppInput from "@/components/AppInput";
+
 export default function StudentCreate() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -106,12 +108,13 @@ export default function StudentCreate() {
 </View>
       
         <Text className="text-sm text-neutral">Full name</Text>
-        <TextInput
-          value={name}
-          onChangeText={setName}
-          className="border p-3 rounded mb-3 bg-white"
-          placeholder="e.g. John Doe"
-        />
+       <AppInput
+  value={name}
+  onChangeText={setName}
+  placeholder="e.g. Adwoa Aggrey"
+  className="border p-3 rounded mb-3 bg-white"
+/>
+
 
         <Text className="text-sm text-neutral">Class</Text>
 
@@ -142,12 +145,12 @@ export default function StudentCreate() {
         )}
 
         <Text className="text-sm text-neutral">Roll no (optional)</Text>
-        <TextInput
-          value={rollNo}
-          onChangeText={setRollNo}
-          className="border p-3 rounded mb-4 bg-white"
-          placeholder="e.g. 12"
-        />
+        <AppInput
+  value={rollNo}
+  onChangeText={setRollNo}
+  placeholder="e.g. 12"
+  className="border p-3 rounded mb-4 bg-white"
+/>
 
         <Pressable
           onPress={handleCreate}

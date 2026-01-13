@@ -13,6 +13,7 @@ import {
   upsertClass,
   ClassRecord,
 } from "../../../../src/services/classes";
+import { MaterialIcons } from "@expo/vector-icons";
 
 export default function ClassEdit() {
   const router = useRouter();
@@ -87,7 +88,23 @@ export default function ClassEdit() {
 
   return (
     <View className="flex-1 bg-slate-50 p-4">
-      <Text className="text-xl font-semibold mb-4">Edit Class</Text>
+     <View className="flex-row items-center mb-2">
+  <Pressable
+    onPress={() => router.back()}
+    className="p-1 mr-2"
+    hitSlop={8}
+  >
+    <MaterialIcons
+      name="arrow-back"
+      size={26}
+      color="#0f172a"
+    />
+  </Pressable>
+
+  <Text className="text-2xl font-extrabold text-slate-900">
+    Edit Class
+  </Text>
+</View>
 
       <Text className="text-sm text-neutral">Name</Text>
       <TextInput

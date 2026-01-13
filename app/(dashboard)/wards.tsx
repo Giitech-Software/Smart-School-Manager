@@ -1,5 +1,4 @@
-// mobile/app/(dashboard)/wards.tsx
-
+// mobile/app/%28dashboard%29/wards.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -7,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Pressable,
+     Image,  
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
@@ -14,6 +14,7 @@ import { signOut } from "firebase/auth";
 import { auth, db } from "@/app/firebase";
 import { getWardsForParent } from "@/src/services/wards";
 import { doc, getDoc } from "firebase/firestore";
+import AppPicker from "@/components/AppPicker";
 
 /* ---------------- Types ---------------- */
 
@@ -73,6 +74,13 @@ export default function Wards() {
   const [rows, setRows] = useState<WardRow[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ✅ Stable date range state (prevents race-condition crash)
+  const [dateRange, setDateRange] = useState(() => getDateRange("month"));
+
+  useEffect(() => {
+    setDateRange(getDateRange(period));
+  }, [period]);
+
   async function handleSignOut() {
     await signOut(auth);
     router.replace("/(auth)/login");
@@ -128,72 +136,87 @@ export default function Wards() {
   }
 
   const activeLabel = PERIOD_LABELS[period];
-  const { fromIso, toIso } = getDateRange(period);
 
   return (
-  <ScrollView className="flex-1 p-4 bg-slate-50">
-    {/* Header */}
-    <View className="flex-row justify-between items-center mb-2">
-      <Text className="text-2xl font-extrabold">My Wards</Text>
-      <Pressable onPress={handleSignOut}>
-        <Text className="text-red-600 font-semibold">Sign out</Text>
-      </Pressable>
-    </View>
+    <ScrollView className="flex-1 p-4 bg-slate-50">
+      {/* Hero Image */}
+<View className="bg-white -mx-4">
+  <Image
+    source={require("../../assets/images/parent-view-attendance.jpg")}
+    style={{ width: "100%", height: 140 }}
+    resizeMode="stretch"
+  />
+</View>
 
-    {/* ✅ NO STUDENTS ASSIGNED */}
-    {rows.length === 0 ? (
-      <View className="mt-12 items-center">
-        <Text className="text-lg font-semibold text-slate-700 mb-2">
-          No student assigned
-        </Text>
-        <Text className="text-center text-slate-500">
-          You currently do not have any students linked to your account.
-          Please contact the school administrator for assistance.
-        </Text>
+      {/* Header */}
+      <View className="flex-row justify-between items-center mb-2">
+        <Text className="text-2xl font-extrabold">My Wards</Text>
+        <Pressable onPress={handleSignOut}>
+          <Text className="text-red-600 font-semibold">Sign out</Text>
+        </Pressable>
       </View>
-    ) : (
-      <>
-        {/* Period Info */}
-        <Text className="text-sm text-slate-500 mb-2">
-          Viewing:{" "}
-          <Text className="font-semibold">{activeLabel} Attendance</Text>
-        </Text>
 
-        {/* Picker */}
-        <View className="bg-white rounded-xl border mb-4">
-          <Picker selectedValue={period} onValueChange={(v) => setPeriod(v)}>
-            <Picker.Item label="Daily Attendance" value="day" />
-            <Picker.Item label="Weekly Attendance" value="week" />
-            <Picker.Item label="Monthly Attendance" value="month" />
-            <Picker.Item label="Term Attendance" value="term" />
-          </Picker>
+      {/* ✅ NO STUDENTS ASSIGNED */}
+      {rows.length === 0 ? (
+        <View className="mt-12 items-center">
+          <Text className="text-lg font-semibold text-slate-700 mb-2">
+            No student assigned
+          </Text>
+          <Text className="text-center text-slate-500">
+            You currently do not have any students linked to your account.
+            Please contact the school administrator for assistance.
+          </Text>
         </View>
+      ) : (
+        <>
+          {/* Period Info */}
+          <Text className="text-sm text-slate-500 mb-2">
+            Viewing:{" "}
+            <Text className="font-semibold">{activeLabel} Attendance</Text>
+          </Text>
 
-        {/* Wards */}
-        {rows.map((w) => (
-          <Pressable
-            key={w.studentId}
-            onPress={() =>
-              router.push({
-                pathname: "/reports/student/[id]",
-                params: {
-                  id: w.studentId,
-                  fromIso,
-                  toIso,
-                  title: `${activeLabel} Attendance`,
-                },
-              })
-            }
-            className="mb-4 rounded-xl border border-slate-200 p-4 bg-white"
-          >
-            <Text className="text-lg font-semibold">{w.studentName}</Text>
+          {/* Picker */}
+          <View className="bg-white rounded-xl border mb-4">
+            <AppPicker
+              selectedValue={period}
+              onValueChange={(v: Period) => setPeriod(v)}
+            >
+              <Picker.Item label="Daily Attendance" value="day" />
+              <Picker.Item label="Weekly Attendance" value="week" />
+              <Picker.Item label="Monthly Attendance" value="month" />
+              <Picker.Item label="Term Attendance" value="term" />
+            </AppPicker>
+          </View>
 
-            <Text className="text-sm text-slate-500 mt-1">
-              Tap to view {activeLabel.toLowerCase()} attendance
-            </Text>
-          </Pressable>
-        ))}
-      </>
-    )}
-  </ScrollView>
-)};
+          {/* Wards */}
+          {rows.map((w) => (
+            <Pressable
+              key={w.studentId}
+              onPress={() => {
+                // ✅ Navigation safety guard
+                if (!dateRange?.fromIso || !dateRange?.toIso) return;
+
+                router.push({
+                  pathname: "/reports/student/[id]",
+                  params: {
+                    id: w.studentId,
+                    fromIso: dateRange.fromIso,
+                    toIso: dateRange.toIso,
+                    title: `${activeLabel} Attendance`,
+                  },
+                });
+              }}
+              className="mb-4 rounded-xl border border-slate-200 p-4 bg-white"
+            >
+              <Text className="text-lg font-semibold">{w.studentName}</Text>
+
+              <Text className="text-sm text-slate-500 mt-1">
+                Tap to view {activeLabel.toLowerCase()} attendance
+              </Text>
+            </Pressable>
+          ))}
+        </>
+      )}
+    </ScrollView>
+  );
+}

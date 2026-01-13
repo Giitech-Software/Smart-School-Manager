@@ -4,6 +4,9 @@ import { View, Text, TextInput, Pressable, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { createClass } from "../../../src/services/classes"; // ensure createClass exists 
 import { MaterialIcons } from "@expo/vector-icons";
+import AppInput from "@/components/AppInput";
+import AppPicker from "@/components/AppPicker";
+
 export default function ClassCreate() {
   const router = useRouter();
   const [name, setName] = useState("");
@@ -58,10 +61,21 @@ export default function ClassCreate() {
 </View>
       
       <Text className="text-sm text-neutral">Name</Text>
-      <TextInput value={name} onChangeText={setName} className="border p-3 rounded mb-3 bg-white" placeholder="e.g. Grade 1A" />
+<AppInput
+  value={name}
+  onChangeText={setName}
+  className="border p-3 rounded mb-3 bg-white"
+  placeholder="e.g. Grade 1A"
+/>
 
-      <Text className="text-sm text-neutral">Description (optional)</Text>
-      <TextInput value={description} onChangeText={setDescription} className="border p-3 rounded mb-4 bg-white" placeholder="Short description" />
+<Text className="text-sm text-neutral">Description (optional)</Text>
+<AppInput
+  value={description}
+  onChangeText={setDescription}
+  className="border p-3 rounded mb-4 bg-white"
+  placeholder="Short description"
+  multiline
+/>
 
       <Pressable onPress={handleSave} className="bg-primary py-3 rounded" disabled={loading}>
         <Text className="text-white text-center">{loading ? "Saving…" : "Create class"}</Text>

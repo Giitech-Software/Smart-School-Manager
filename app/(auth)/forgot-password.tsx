@@ -14,6 +14,7 @@ import {
 import { useRouter, Link } from "expo-router";
 import { sendPasswordResetEmail } from "firebase/auth";
 import { auth } from "@/app/firebase";
+import AppInput from "@/components/AppInput";
 
 function isValidEmail(email: string) {
   return /\S+@\S+\.\S+/.test(email);
@@ -93,16 +94,13 @@ export default function ForgotPassword() {
           <Text className="text-sm font-medium text-slate-700 mb-1">
             Email
           </Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            placeholder="you@example.com"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            textContentType="emailAddress"
-            className="border-2 border-slate-400 rounded-xl px-4 py-3 mb-4 text-base text-slate-900"
-            onSubmitEditing={handleReset}
-          />
+          <AppInput
+  value={email}
+  onChangeText={setEmail}
+  placeholder="you@example.com"
+  keyboardType="email-address"
+  className="border-2 border-slate-400 rounded-xl px-4 py-3 mb-4 text-base bg-white"
+/>
 
           {/* Reset button */}
           <Pressable

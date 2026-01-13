@@ -40,11 +40,14 @@ export default function StudentsList() {
     }
   }
 
-  async function handleDelete(id: string) {
-    Alert.alert("Confirm", "Delete this student?", [
+ async function handleDelete(id: string, name?: string) {
+  Alert.alert(
+    "⚠️ Confirm Delete",
+    `Are you SURE you want to DELETE student "${name ?? 'this student'}"?\n\nThis action CANNOT be undone!`,
+    [
       { text: "Cancel", style: "cancel" },
       {
-        text: "Delete",
+        text: "DELETE",
         style: "destructive",
         onPress: async () => {
           setDeletingId(id);
@@ -59,8 +62,10 @@ export default function StudentsList() {
           }
         },
       },
-    ]);
-  }
+    ]
+  );
+}
+
 
   if (loading) {
     return (
@@ -123,11 +128,12 @@ export default function StudentsList() {
 
               {/* DELETE BUTTON */}
               <Pressable
-                onPress={() => handleDelete(item.id!)}
-                className="p-2 rounded bg-white/20"
-              >
-                <MaterialIcons name="delete" size={20} color="#EF4444" />
-              </Pressable>
+  onPress={() => handleDelete(item.id!, item.name)}
+  className="p-2 rounded bg-white/20"
+>
+  <MaterialIcons name="delete" size={20} color="#EF4444" />
+</Pressable>
+
 
               {/* ENROLL BIOMETRIC BUTTON */}
               {!item.fingerprintId && (

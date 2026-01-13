@@ -6,6 +6,7 @@ import { getUserById, upsertUser, AppUser } from "../../src/services/users";
 import { auth } from "../../app/firebase";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
+import AppPicker from "@/components/AppPicker";
 
 const USER_ROLES = [
   "parent",
@@ -74,33 +75,43 @@ export default function UserDetail() {
     }
   }
 
-  async function handlePromoteToAdmin() {
-    if (!user?.id) return;
-    Alert.alert(
-      "Promote to admin",
-      `Are you sure you want to give admin role to ${user.displayName ?? user.email}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Promote",
-          style: "destructive",
-          onPress: async () => {
-            setPromoting(true);
-            try {
-              // Use existing upsertUser to set role; rules enforce only admins can do this
-              await upsertUser({ id: user.id, role: "admin" });
-              Alert.alert("Success", "User promoted to admin. They must re-login to refresh their profile.");
-            } catch (err: any) {
-              console.error("promote error", err);
-              Alert.alert("Promotion failed", err?.message ?? String(err));
-            } finally {
-              setPromoting(false);
-            }
-          },
+ async function handlePromoteToAdmin() {
+  if (!user?.id) return;
+  Alert.alert(
+    "Promote to admin",
+    `Are you sure you want to give admin role to ${user.displayName ?? user.email}?`,
+    [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Promote",
+        style: "destructive",
+        onPress: async () => {
+          setPromoting(true);
+          try {
+            await upsertUser({
+              ...user,
+              role: "admin",
+            });
+
+            // Update local state so UI shows role immediately
+            setUser((prev) => prev ? { ...prev, role: "admin" } : prev);
+
+            Alert.alert(
+              "Success",
+              "User promoted to admin. They must re-login to refresh their profile."
+            );
+          } catch (err: any) {
+            console.error("promote error", err);
+            Alert.alert("Promotion failed", err?.message ?? String(err));
+          } finally {
+            setPromoting(false);
+          }
         },
-      ]
-    );
-  }
+      },
+    ]
+  );
+}
+
 
   if (loading) return (<View className="flex-1 items-center justify-center bg-slate-50"><ActivityIndicator/></View>);
 
@@ -127,33 +138,73 @@ export default function UserDetail() {
 </View>
 
       <Text className="text-sm text-neutral">Display name</Text>
-      <TextInput value={user.displayName ?? ""} onChangeText={(t) => setUser({ ...user, displayName: t })} className="border p-3 rounded mb-3 bg-white" />
+<TextInput
+  value={user.displayName ?? ""}
+  onChangeText={(t) => setUser({ ...user, displayName: t })}
+  className="border p-3 rounded mb-3 bg-white"
+/>
 
-      <Text className="text-sm text-neutral mb-1">Role</Text>
-<View className="border rounded mb-4 bg-white overflow-hidden">
-  <Picker
-    selectedValue={user.role ?? "teacher"}
-    onValueChange={(value) =>
-      setUser({ ...user, role: value })
-    }
-  >
-    <Picker.Item label="Parent" value="parent" />
-    <Picker.Item label="Teacher" value="teacher" />
-    <Picker.Item label="Non-Teaching Staff" value="non_teaching_staff" />
-    <Picker.Item label="General Staff" value="general_staff" />
-    <Picker.Item label="Administrator" value="admin" />
-  </Picker>
-</View>
+{currentUserIsAdmin && user && (
+  <>
+    {/* Role Picker */}
+    <Text className="text-sm text-neutral mb-1">Role</Text>
+    <View className="border rounded mb-4 bg-white overflow-hidden">
+      <AppPicker
+        selectedValue={user.role ?? "teacher"}
+        onValueChange={(value) => setUser({ ...user, role: value })}
+      >
+        <Picker.Item label="Parent" value="parent" />
+        <Picker.Item label="Teacher" value="teacher" />
+        <Picker.Item label="Non-Teaching Staff" value="non_teaching_staff" />
+        <Picker.Item label="General Staff" value="general_staff" />
+        <Picker.Item label="Administrator" value="admin" />
+      </AppPicker>
+    </View>
 
-      <Pressable onPress={handleSave} className="bg-primary py-3 rounded" disabled={saving}>
-        <Text className="text-white text-center">{saving ? "Saving…" : "Save"}</Text>
+    {/* Approval Toggle */}
+    <Text className="text-ml text-neutral-600 mb-1 mt-2">Approval</Text>
+    <View className="flex-row items-center mb-4">
+      <Pressable
+        onPress={() =>
+          setUser((prev) =>
+            prev ? { ...prev, approved: !prev.approved } : prev
+          )
+        }
+        className={`px-4 py-2 rounded ${
+          user.approved ? "bg-green-600" : "bg-red-600"
+        }`}
+      >
+        <Text className="text-white">
+          {user.approved ? "Approved" : "Not Approved"}
+        </Text>
       </Pressable>
+    </View>
 
-      {currentUserIsAdmin && user?.role !== "admin" && (
-        <Pressable onPress={handlePromoteToAdmin} className="mt-3 bg-red py-3 rounded" disabled={promoting}>
-          <Text className="text-white text-center">{promoting ? "Promoting…" : "Promote to Admin"}</Text>
-        </Pressable>
-      )}
+    {/* Promote to Admin */}
+    {user.role !== "admin" && (
+      <Pressable
+        onPress={handlePromoteToAdmin}
+        className="mt-3 bg-red py-3 rounded"
+        disabled={promoting}
+      >
+        <View className="bg-green-300 rounded-lg px-4 py-2">
+          <Text className="text-white text-center font-medium">
+            {promoting ? "Promoting…" : "Promote to Admin"}
+          </Text>
+        </View>
+      </Pressable>
+    )}
+  </>
+)}
+
+{/* Save button */}
+<Pressable
+  onPress={handleSave}
+  className="bg-primary py-3 rounded"
+  disabled={saving}
+>
+  <Text className="text-white text-center">{saving ? "Saving…" : "Save"}</Text>
+</Pressable>
     </View>
   );
 }

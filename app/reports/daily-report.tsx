@@ -292,17 +292,25 @@ export default function DailyReport() {
               {item.studentName ?? item.studentId}
             </Text>
 
-            <View className="flex-row justify-between mt-2">
-              <Text className="text-emerald-600">
-                P: {item.presentCount}
-              </Text>
-              <Text className="text-red-500">
-                A: {item.absentCount}
-              </Text>
-              <Text className="text-slate-700">
-                {(item.percentagePresent ?? 0).toFixed(1)}%
-              </Text>
-            </View>
+           <View className="flex-row justify-between mt-2">
+  <Text className="text-emerald-600">
+    P: {item.presentCount}
+  </Text>
+
+  <Text className="text-red-500">
+    A: {item.absentCount}
+  </Text>
+
+  {/* ✅ NEW — LATE COUNT */}
+  <Text className="text-amber-600">
+    L: {item.lateCount}
+  </Text>
+
+  <Text className="text-slate-700">
+    {(item.percentagePresent ?? 0).toFixed(1)}%
+  </Text>
+</View>
+
           </Pressable>
         ))
       )}
