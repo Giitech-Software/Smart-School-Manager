@@ -33,6 +33,11 @@ export type GetAttendanceSummaryOptions = {
 function toIsoDate(d: Date) {
   return d.toISOString().slice(0, 10);
 }
+/** Normalize ISO date to "YYYY-MM-DD" */
+function normalizeIsoDate(d?: string) {
+  if (!d) return "";
+  return d.length > 10 ? d.slice(0, 10) : d;
+}
 
 /** Returns the last N **school days** (Mon-Fri) */
 function getLastNSchoolDays(n: number, today = new Date()): string[] {
@@ -67,12 +72,19 @@ export async function getAttendanceForStudentInRange(
       return [];
     }
 
-    const q = query(
-      attendanceCollection,
-      where("studentId", "==", studentId),
-      where("date", ">=", fromIso),
-      where("date", "<=", toIso)
-    );
+   const from = normalizeIsoDate(fromIso);
+const to = normalizeIsoDate(toIso);
+
+// 🔍 TEMP DEBUG — safe to remove later
+console.log("Normalized range", { from, to });
+
+const q = query(
+  attendanceCollection,
+  where("studentId", "==", studentId),
+  where("date", ">=", from),
+  where("date", "<=", to)
+);
+
 
     const snap = await getDocs(q);
 

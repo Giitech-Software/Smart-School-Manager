@@ -6,6 +6,7 @@ import {
   query,
   where,
   getDocs,
+  setDoc,
   serverTimestamp,
   orderBy,
   updateDoc,
@@ -14,6 +15,19 @@ import {
 import { db } from "../../app/firebase";
 import type { AttendanceRecord } from "./types";
 import { getAttendanceSettings } from "./attendanceSettings";
+
+
+// At the top of the file (below imports)
+function hasPassedClosingTime(closeAfter?: string) {
+  if (!closeAfter) return false;
+
+  const [h, m] = closeAfter.split(":").map(Number);
+  const now = new Date();
+  const closeTime = new Date();
+  closeTime.setHours(h, m, 0, 0);
+
+  return now >= closeTime;
+}
 
 const attendanceCollection = collection(db, "attendance");
 
@@ -273,4 +287,68 @@ export async function getAttendanceForDate(
       ...(d.data() as any),
     })
   );
+}
+
+/**
+ * Auto-mark absent students at the end of the day
+ * ✅ Only runs if current time >= closeAfter
+ */
+export async function autoMarkAbsentsForToday() {
+  try {
+    const settings = await getAttendanceSettings();
+// 🔒 safety check: make sure settings exist
+    if (!settings || !settings.closeAfter) return;
+    // 1) only run after closing time
+    if (!hasPassedClosingTime(settings.closeAfter)) return;
+
+    const today = new Date().toISOString().split("T")[0]; // "2026-01-13"
+
+    // 2) Get all students
+    const studentsSnap = await getDocs(collection(db, "students"));
+
+    // 3) Get today’s attendance records
+    const attendanceSnap = await getDocs(
+      query(
+        collection(db, "attendance"),
+        where("date", "==", today)
+      )
+    );
+
+    // 4) Build set of students already marked today
+    const marked = new Set(
+      attendanceSnap.docs.map(doc => doc.data().studentId)
+    );
+
+    // 5) Loop and mark missing students as ABSENT
+    const promises: Promise<any>[] = [];
+
+    studentsSnap.forEach(studentDoc => {
+      const studentId = studentDoc.id;
+
+      // skip if already marked
+      if (marked.has(studentId)) return;
+
+      const ref = doc(collection(db, "attendance"));
+
+      promises.push(
+        setDoc(ref, {
+          studentId,
+          classId: studentDoc.data().classId ?? "",
+          date: today,
+          status: "absent",
+          type: "auto",
+          biometric: false,
+          checkInTime: null,
+          checkOutTime: null,
+          createdAt: serverTimestamp(),
+          auto: true,
+        })
+      );
+    });
+
+    await Promise.all(promises);
+    console.log("ABSENT auto-mark completed");
+  } catch (err) {
+    console.error("autoMarkAbsentsForToday error", err);
+  }
 }

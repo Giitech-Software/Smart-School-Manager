@@ -117,22 +117,9 @@ setSelectedWeek(currentWeek);
     (async () => {
       try {
         setLoading(true);
-function getWeekQueryRange(week: any) {
-  // normalize week start/end to include full days
-const from = new Date(selectedWeek.startDate);
-const to = new Date(selectedWeek.endDate);
+const fromIso = selectedWeek.startDate; // "YYYY-MM-DD"
+const toIso = selectedWeek.endDate;     // "YYYY-MM-DD"
 
-from.setHours(0, 0, 0, 0);
-to.setHours(23, 59, 59, 999);
-
-
-  return {
-    fromIso: from.toISOString(),
-    toIso: to.toISOString(),
-  };
-}
-
-const { fromIso, toIso } = getWeekQueryRange(selectedWeek);
 
  
         // -------- CLASS FILTER --------

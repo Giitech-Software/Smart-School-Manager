@@ -127,7 +127,7 @@ export default function ReportsDashboard() {
     resizeMode="stretch"
   />
 </View>
-<Text className="text-ml text-yellow-800 mt-4">
+<Text className="text-ml font-bold text-slate-800 py-4">
   Quick previews — tap a tile to open detailed reports
 </Text>
 

@@ -151,6 +151,13 @@ const router = useRouter();
             </Text>
           </View>
 
+ <View>
+            <Text className="text-xs text-slate-500">Late</Text>
+            <Text className="text-lg font-bold text-amber-700">
+              {summary.lateCount}
+            </Text>
+          </View>
+
           <View>
             <Text className="text-xs text-slate-500">Attendance %</Text>
             <Text className="text-lg font-bold">

@@ -19,6 +19,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons, Entypo } from "@expo/vector-icons";
 import useCurrentUser from "../src/hooks/useCurrentUser";
 import { getAttendanceSettings } from "../src/services/attendanceSettings";
+import { autoMarkAbsentsForToday } from "../src/services/attendance"; // adjust path if needed
 
 /* ---------- helpers ---------- */
 
@@ -47,6 +48,8 @@ export default function Home(): JSX.Element {
   const [signingOut, setSigningOut] = useState(false);
   const { userDoc, loading: userDocLoading } = useCurrentUser();
   const [showWelcome, setShowWelcome] = useState(true);
+
+  const [autoMarking, setAutoMarking] = useState(false);
 
   // Step 2 — attendance settings state
  const [attendanceSettings, setAttendanceSettings] = useState<{
@@ -218,19 +221,39 @@ export default function Home(): JSX.Element {
           </Link>
 
         
-          <Link href="/reports" asChild>
-            <Pressable className="bg-white rounded-2xl p-4 shadow flex-row items-center">
-              <View className="p-3 rounded-lg bg-secondary/10 mr-3">
-                <MaterialIcons name="bar-chart" size={22} color="#FACC15" />
-              </View>
-              <View>
-                <Text className="font-semibold text-dark">Reports</Text>
-                <Text className="text-sm text-neutral mt-1">
-                Daily • Weekly •  Monthly •  Termly
-                </Text>
-              </View>
-            </Pressable>
-          </Link>
+         <Pressable
+  className="bg-white rounded-2xl p-4 shadow flex-row items-center"
+  onPress={async () => {
+    try {
+      setAutoMarking(true);                  // show spinner
+      await autoMarkAbsentsForToday();       // run auto-mark
+      router.push("/reports");               // navigate AFTER marking
+    } catch (err) {
+      console.error("Auto-mark failed", err);
+      Alert.alert("Error", "Failed to auto-mark absents. Please try again.");
+    } finally {
+      setAutoMarking(false);                 // hide spinner
+    }
+  }}
+>
+  <View className="p-3 rounded-lg bg-secondary/10 mr-3">
+    <MaterialIcons name="bar-chart" size={22} color="#FACC15" />
+  </View>
+  <View>
+    <Text className="font-semibold text-dark">Reports</Text>
+    <Text className="text-sm text-neutral mt-1">
+      Daily • Weekly • Monthly • Termly
+    </Text>
+  </View>
+  {autoMarking && (
+    <ActivityIndicator
+      size="small"
+      color="#2563EB"
+      style={{ marginLeft: 8 }}
+    />
+  )}
+</Pressable>
+
 
           {isAdmin ? (
             <Pressable
