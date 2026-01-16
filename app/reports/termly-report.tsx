@@ -245,6 +245,9 @@ export default function TermlyReport() {
       <Text className="text-lg font-semibold mt-6 mb-2">
         Students ({rows.length})
       </Text>
+<Text className="text-ml text-slate-700 mb-2">
+  P = Present • L = Late • T = Attended • A = Absent
+</Text>
 
       {rows.length === 0 ? (
         <Text className="text-slate-500">
@@ -276,19 +279,23 @@ export default function TermlyReport() {
     P: {item.presentCount}
   </Text>
 
-  <Text className="text-red-500">
-    A: {item.absentCount}
-  </Text>
-
-  {/* ✅ NEW — LATE COUNT */}
   <Text className="text-amber-600">
     L: {item.lateCount}
+  </Text>
+
+  <Text className="text-blue-600">
+    T: {item.attendedSessions}
+  </Text>
+
+  <Text className="text-red-500">
+    A: {item.absentCount}
   </Text>
 
   <Text className="text-slate-700">
     {item.percentagePresent.toFixed(1)}%
   </Text>
 </View>
+
 
           </Pressable>
         ))

@@ -9,12 +9,17 @@ const studentsCollection = collection(db, "students");
 
 export type AttendanceSummary = {
   studentId: string;
+
   presentCount: number;
-  absentCount: number;
   lateCount: number;
-  totalSessions: number;
+  absentCount: number;
+
+  attendedSessions: number;   // present + late  ✅ NEW (UI “Total”)
+  totalSchoolDays: number;    // present + late + absent (denominator)
+
   percentagePresent: number; // 0..100
 };
+
 
 export type GetAttendanceSummaryOptions = {
   days?: number;              // Default: last 5 school days
@@ -128,18 +133,29 @@ console.log("Attendance range", { studentId, fromIso, toIso });
  
   }
 
-  const total = records.length;
-  const percentage = total === 0 ? 0 : Number(((present / total) * 100).toFixed(2));
+  const totalSchoolDays = present + late + absent;
+const attendedSessions = present + late;
+
+const score = present + late * 0.5;
+
+const percentage =
+  totalSchoolDays === 0
+    ? 0
+    : Number(((score / totalSchoolDays) * 100).toFixed(2));
 
   return {
-    studentId,
-    presentCount: present,
-    absentCount: absent,
-    lateCount: late,
-    totalSessions: total,
-    percentagePresent: percentage,
-    
-  };
+  studentId,
+  presentCount: present,
+  lateCount: late,
+  absentCount: absent,
+
+  attendedSessions,
+  totalSchoolDays,
+
+  percentagePresent: percentage,
+};
+
+
 }
 
 /* -------------------------------------------------------------------------- */
@@ -184,17 +200,29 @@ export async function computeClassSummary(
         else if (s === "late") late++;
       }
 
-      const total = recs.length;
-      const percentage = total === 0 ? 0 : Number(((present / total) * 100).toFixed(2));
+    const totalSchoolDays = present + late + absent;
+const attendedSessions = present + late;
 
-      out.push({
-        studentId,
-        presentCount: present,
-        absentCount: absent,
-        lateCount: late,
-        totalSessions: total,
-        percentagePresent: percentage,
-      });
+const score = present + late * 0.5;
+
+const percentage =
+  totalSchoolDays === 0
+    ? 0
+    : Number(((score / totalSchoolDays) * 100).toFixed(2));
+
+
+           out.push({
+  studentId,
+  presentCount: present,
+  lateCount: late,
+  absentCount: absent,
+
+  attendedSessions,
+  totalSchoolDays,
+
+  percentagePresent: percentage,
+});
+
     }
 
     return out;

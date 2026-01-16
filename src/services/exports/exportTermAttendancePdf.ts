@@ -1,11 +1,13 @@
+// mobile/src/services/exports/exportTermAttendancePdf.ts
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
 import { getAttendanceSummary } from "../attendanceSummary";
-import { getTerm } from "../terms";
+import { getTerm } from "../terms"; 
 import { listWeeks } from "../weeks";
 import { listClasses } from "../classes";
+import { generateAttendanceRows, attendanceTableStyles } from "./generateAttendanceRows";
 
 /* ---------------------------------------------
    Term Attendance PDF Export
@@ -16,38 +18,21 @@ type ExportTermPdfOptions = {
   classId?: string;
 };
 
-export async function exportTermAttendancePdf(
-  opts: ExportTermPdfOptions
-) {
-  /* ---------------------------------------------
-     Platform guard
-  ---------------------------------------------- */
+export async function exportTermAttendancePdf(opts: ExportTermPdfOptions) {
   if (Platform.OS === "web") {
-    throw new Error(
-      "PDF export is not supported on web. Please use the mobile app."
-    );
+    throw new Error("PDF export is not supported on web.");
   }
 
-  /* ---------------------------------------------
-     Load term
-  ---------------------------------------------- */
+  // Load term
   const term = await getTerm(opts.termId);
+  if (!term) throw new Error("Term not found");
 
-  if (!term) {
-    throw new Error("Term not found");
-  }
-
-  /* ---------------------------------------------
-     Resolve class name
-  ---------------------------------------------- */
+  // Resolve class name
   let classLabel = "All Classes";
-
   if (opts.classId) {
     try {
       const classes = await listClasses();
-      const match = classes.find(
-        (c) => c.id === opts.classId || c.classId === opts.classId
-      );
+      const match = classes.find(c => c.id === opts.classId || c.classId === opts.classId);
       if (match) classLabel = match.name;
     } catch (err) {
       console.warn("Failed to resolve class name", err);
@@ -57,20 +42,12 @@ export async function exportTermAttendancePdf(
   const title = "Term Attendance Report";
   const subtitle = `${term.name} (${term.startDate} → ${term.endDate})`;
 
-  /* ---------------------------------------------
-     Load weeks for term
-  ---------------------------------------------- */
+  // Load weeks for term
   const weeks = await listWeeks(term.id);
+  if (!weeks || weeks.length === 0) throw new Error("No weeks found for this term");
 
-  if (!weeks || weeks.length === 0) {
-    throw new Error("No weeks found for this term");
-  }
-
-  /* ---------------------------------------------
-     Build weekly sections
-  ---------------------------------------------- */
+  // Build weekly sections
   let contentHtml = "";
-
   for (const week of weeks) {
     const summaries = await getAttendanceSummary({
       fromIso: week.startDate,
@@ -82,28 +59,13 @@ export async function exportTermAttendancePdf(
 
     if (!summaries || summaries.length === 0) continue;
 
-    const rowsHtml = summaries
-      .map(
-        (s, idx) => `
-          <tr>
-            <td>${idx + 1}</td>
-            <td>${s.studentName ?? s.studentId}</td>
-            <td>${s.presentCount}</td>
-            <td>${s.absentCount}</td>
-            <td>${s.lateCount}</td>
-            <td>${s.totalSessions}</td>
-            <td>${s.percentagePresent.toFixed(1)}%</td>
-          </tr>
-        `
-      )
-      .join("");
+    // Use the shared helper to generate rows with performance-based coloring
+    const rowsHtml = generateAttendanceRows(summaries);
 
     contentHtml += `
       <h2>
         Week ${week.weekNumber}
-        <span class="week-range">
-          (${week.startDate} → ${week.endDate})
-        </span>
+        <span class="week-range">(${week.startDate} → ${week.endDate})</span>
       </h2>
 
       <table>
@@ -111,11 +73,11 @@ export async function exportTermAttendancePdf(
           <tr>
             <th>#</th>
             <th>Student</th>
-            <th>Present</th>
-            <th>Absent</th>
-            <th>Late</th>
-            <th>Total</th>
-            <th>%</th>
+            <th class="present">Present</th>
+            <th class="absent">Absent</th>
+            <th class="late">Late</th>
+            <th class="total">Total</th>
+            <th class="percent">%</th>
           </tr>
         </thead>
         <tbody>
@@ -125,34 +87,17 @@ export async function exportTermAttendancePdf(
     `;
   }
 
-  if (!contentHtml) {
-    throw new Error("No attendance data available for this term");
-  }
+  if (!contentHtml) throw new Error("No attendance data available for this term");
 
-  /* ---------------------------------------------
-     HTML Template
-  ---------------------------------------------- */
+  // Build full HTML
   const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
-      padding: 24px;
-      color: #111;
-    }
-    h1 {
-      text-align: center;
-      margin-bottom: 4px;
-    }
-    .meta {
-      text-align: center;
-      margin-bottom: 24px;
-      font-size: 14px;
-      color: #555;
-    }
+    ${attendanceTableStyles}
+
     h2 {
       margin-top: 32px;
       margin-bottom: 8px;
@@ -160,34 +105,20 @@ export async function exportTermAttendancePdf(
       border-bottom: 1px solid #ddd;
       padding-bottom: 4px;
     }
+
     .week-range {
       font-size: 12px;
       font-weight: normal;
       color: #666;
       margin-left: 6px;
     }
+
     table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
       margin-bottom: 16px;
     }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 6px 8px;
-      text-align: center;
-    }
-    th {
-      background: #f3f4f6;
-      font-weight: 600;
-    }
-    tr:nth-child(even) {
-      background: #fafafa;
-    }
+
     @media print {
-      h2 {
-        page-break-before: always;
-      }
+      h2 { page-break-before: always; }
     }
   </style>
 </head>
@@ -203,14 +134,9 @@ export async function exportTermAttendancePdf(
 </html>
 `;
 
-  /* ---------------------------------------------
-     Generate PDF & Share
-  ---------------------------------------------- */
+  // Generate PDF & share
   const result = await Print.printToFileAsync({ html });
-
-  if (!result?.uri) {
-    throw new Error("PDF export is not supported on web. Please use the mobile app.");
-  }
+  if (!result?.uri) throw new Error("Failed to generate PDF file");
 
   await Sharing.shareAsync(result.uri, {
     mimeType: "application/pdf",

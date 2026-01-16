@@ -1,3 +1,4 @@
+// mobile/src/services/exports/studentAttendancePdfTemplate.ts
 import type { AttendanceRecord } from "../types";
 
 type TemplateParams = {
@@ -47,10 +48,10 @@ export function studentAttendancePdfTemplate({
               : "—";
 
             return `
-              <tr>
+              <tr class="${status}">
                 <td>${idx + 1}</td>
                 <td>${new Date(r.date).toLocaleDateString()}</td>
-                <td>${status}</td>
+                <td class="status ${status}">${status}</td>
                 <td>${checkIn}</td>
                 <td>${checkOut}</td>
               </tr>
@@ -67,14 +68,71 @@ export function studentAttendancePdfTemplate({
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
   padding: 24px;
+  color: #111;
 }
-h1 { text-align: center; }
-.meta { text-align: center; font-size: 14px; margin-bottom: 20px; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-th, td { border: 1px solid #ddd; padding: 6px; text-align: center; }
-th { background: #f3f4f6; }
+
+h1 {
+  text-align: center;
+  margin-bottom: 6px;
+}
+
+.meta {
+  text-align: center;
+  font-size: 14px;
+  margin-bottom: 20px;
+  color: #555;
+}
+
+/* Summary badges */
+.summary {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.badge.present { background: #dcfce7; color: #166534; }
+.badge.absent { background: #fee2e2; color: #991b1b; }
+.badge.late { background: #fef3c7; color: #92400e; }
+.badge.percent { background: #ede9fe; color: #5b21b6; }
+
+/* Table */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 6px;
+  text-align: center;
+}
+
+th {
+  background: #f3f4f6;
+  font-weight: 600;
+}
+
+/* Row coloring by status */
+tr.present { background: #f0fdf4; }
+tr.absent { background: #fef2f2; }
+tr.late { background: #fffbeb; }
+
+td.status.present { color: #166534; font-weight: 600; }
+td.status.absent { color: #991b1b; font-weight: 600; }
+td.status.late { color: #92400e; font-weight: 600; }
 </style>
 </head>
+
 <body>
 <h1>${title}</h1>
 
@@ -82,11 +140,15 @@ th { background: #f3f4f6; }
   <div><strong>${studentName}</strong></div>
   <div><strong>Class:</strong> ${classLabel}</div>
   <div>${fromIso} → ${toIso}</div>
-  <div>
-    Present: ${summary.presentCount} |
-    Absent: ${summary.absentCount} |
-    Late: ${summary.lateCount} |
-    Attendance: ${summary.percentagePresent.toFixed(1)}%
+
+  <div class="summary">
+    <span class="badge present">Present: ${summary.presentCount}</span>
+     <span class="badge late">Late: ${summary.lateCount}</span>
+    <span class="badge absent">Absent: ${summary.absentCount}</span>
+   
+    <span class="badge percent">
+      Attendance: ${summary.percentagePresent.toFixed(1)}%
+    </span>
   </div>
 </div>
 
@@ -107,4 +169,5 @@ ${rowsHtml}
 </body>
 </html>
 `;
-} 
+}
+

@@ -173,6 +173,14 @@ export default function ReportsDashboard() {
       </Text>
     </View>
 
+ {/* ✅ NEW — LATE SUMMARY */}
+    <View>
+      <Text className="text-xs text-slate-500">Late</Text>
+      <Text className="text-lg font-bold text-amber-600">
+        {totals.late}
+      </Text>
+    </View> 
+
     <View>
       <Text className="text-xs text-slate-500">Absent</Text>
       <Text className="text-lg font-bold text-red-500">
@@ -180,13 +188,7 @@ export default function ReportsDashboard() {
       </Text>
     </View>
 
-    {/* ✅ NEW — LATE SUMMARY */}
-    <View>
-      <Text className="text-xs text-slate-500">Late</Text>
-      <Text className="text-lg font-bold text-amber-600">
-        {totals.late}
-      </Text>
-    </View>
+   
 
     <View>
       <Text className="text-xs text-slate-500">Attendance %</Text>

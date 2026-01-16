@@ -11,12 +11,9 @@ import {
 import { useRouter } from "expo-router";
 import * as LocalAuthentication from "expo-local-authentication";
 import { listClasses, type ClassRecord } from "../../src/services/classes";
-import { listStudents } from "../../src/services/students";
 import type { Student as StudentRecord } from "../../src/services/types";
 import { registerAttendanceUnified } from "../../src/services/attendance";
-import * as SecureStore from "expo-secure-store";
 import { getStudentById } from "../../src/services/students";
-import { biometricKeyForStudent } from "../../src/services/secureKeys";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { collection, query, where, onSnapshot } from "firebase/firestore";
 import { db } from "../../app/firebase"; // adjust path if needed
@@ -52,26 +49,9 @@ function StudentRow({
 }) {
   const [hasBiometric, setHasBiometric] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    async function checkBiometric() {
-      try {
-        const key = biometricKeyForStudent(student.id!);
-        const storedBiometricId = await SecureStore.getItemAsync(key);
-        if (mounted) setHasBiometric(!!storedBiometricId);
-      } catch (err) {
-        console.error("SecureStore check error:", err);
-        if (mounted) setHasBiometric(false);
-      }
-    }
-
-    checkBiometric();
-
-    return () => {
-      mounted = false;
-    };
-  }, [student.id]);
+ useEffect(() => {
+  setHasBiometric(!!student.fingerprintId);
+}, [student.fingerprintId]);
 
   return (
     <View
@@ -175,63 +155,87 @@ useEffect(() => {
   }
 
   async function tryFingerprint(studentId: string, checkType: "in" | "out") {
-    const attendanceCheck = isAttendanceAllowed();
-if (!attendanceCheck.allowed) {
-  Alert.alert("Attendance not allowed", attendanceCheck.reason);
-  return;
-}
+  const attendanceCheck = isAttendanceAllowed();
+  if (!attendanceCheck.allowed) {
+    Alert.alert("Attendance not allowed", attendanceCheck.reason);
+    return;
+  }
 
-    if (!selectedClassId) {
-      Alert.alert("Select class", "Please select a class before recording attendance.");
+  if (!selectedClassId) {
+    Alert.alert("Select class", "Please select a class before recording attendance.");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    const student = await getStudentById(studentId);
+    if (!student) {
+      Alert.alert("Student not found");
       return;
     }
 
-    setLoading(true);
+    const isBiometricallyEnrolled = !!student.fingerprintId;
 
-    try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      if (!hasHardware) {
-        Alert.alert("No biometric hardware on device");
-        return;
-      }
+    /* -------------------------------------------------
+     * ❌ NOT ENROLLED → SHOW ERROR AND EXIT
+     * ------------------------------------------------- */
+    if (!isBiometricallyEnrolled) {
+      Alert.alert(
+        "Biometric not enrolled",
+        "This student is not biometrically enrolled. Please contact the administrator."
+      );
 
-      const enrolled = await LocalAuthentication.isEnrolledAsync();
-      if (!enrolled) {
-        Alert.alert("No biometrics enrolled on this device");
-        return;
-      }
-
-      const res = await LocalAuthentication.authenticateAsync({
-        promptMessage: `Authenticate to check-${checkType}`,
-      });
-
-      if (!res.success) {
-        Alert.alert("Authentication failed");
-        return;
-      }
-
-      await registerAttendanceUnified({
-        studentId,
-        classId: selectedClassId!,
-        mode: checkType,
-        biometric: true,
-      });
-
-      const student = await getStudentById(studentId);
-      setConfirmation({
-        name: student?.name ?? "Student",
-        mode: checkType,
-        time: new Date().toLocaleTimeString(),
-      });
-
-      setTimeout(() => setConfirmation(null), 3000);
-    } catch (err: any) {
-      console.error("Fingerprint error:", err);
-      Alert.alert("Error", err?.message ?? String(err));
-    } finally {
-      setLoading(false);
+      // 🔴 DO NOT REGISTER ATTENDANCE
+      return;
     }
+
+    /* -------------------------------------------------
+     * ✅ ENROLLED → REQUIRE BIOMETRIC AUTH
+     * ------------------------------------------------- */
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    if (!hasHardware) {
+      Alert.alert("No biometric hardware on device");
+      return;
+    }
+
+    const enrolledOnDevice = await LocalAuthentication.isEnrolledAsync();
+    if (!enrolledOnDevice) {
+      Alert.alert("No biometrics enrolled on this device");
+      return;
+    }
+
+    const res = await LocalAuthentication.authenticateAsync({
+      promptMessage: `Authenticate to check-${checkType}`,
+    });
+
+    if (!res.success) {
+      Alert.alert("Authentication failed");
+      return;
+    }
+
+    await registerAttendanceUnified({
+      studentId,
+      classId: selectedClassId,
+      mode: checkType,
+      biometric: true,
+    });
+
+    setConfirmation({
+      name: student.name ?? "Student",
+      mode: checkType,
+      time: new Date().toLocaleTimeString(),
+    });
+
+    setTimeout(() => setConfirmation(null), 3000);
+  } catch (err: any) {
+    console.error("Fingerprint error:", err);
+    Alert.alert("Error", err?.message ?? String(err));
+  } finally {
+    setLoading(false);
   }
+}
+
 
   function goToQR(mode?: "in" | "out") {
     const attendanceCheck = isAttendanceAllowed();

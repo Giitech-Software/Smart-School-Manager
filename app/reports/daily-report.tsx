@@ -1,4 +1,4 @@
-// app/reports/daily-report.tsx
+//a
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -267,6 +267,9 @@ export default function DailyReport() {
         Students ({studentRows.length})
       </Text>
 
+<Text className="text-ml text-slate-700 mb-2">
+  P = Present • L = Late • A = Absent
+</Text>
       {studentRows.length === 0 ? (
         <Text className="text-slate-500">
           No attendance records for this day.
@@ -297,19 +300,19 @@ export default function DailyReport() {
     P: {item.presentCount}
   </Text>
 
-  <Text className="text-red-500">
-    A: {item.absentCount}
-  </Text>
-
-  {/* ✅ NEW — LATE COUNT */}
   <Text className="text-amber-600">
     L: {item.lateCount}
   </Text>
 
+  <Text className="text-red-500">
+    A: {item.absentCount}
+  </Text>
+
   <Text className="text-slate-700">
-    {(item.percentagePresent ?? 0).toFixed(1)}%
+    {item.percentagePresent.toFixed(1)}%
   </Text>
 </View>
+
 
           </Pressable>
         ))
@@ -317,4 +320,3 @@ export default function DailyReport() {
     </ScrollView>
   );
 }
- 

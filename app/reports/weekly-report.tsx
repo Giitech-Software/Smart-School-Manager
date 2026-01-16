@@ -340,6 +340,9 @@ const toIso = selectedWeek.endDate;     // "YYYY-MM-DD"
         Students ({studentRows.length})
       </Text>
 
+<Text className="text-ml text-slate-700 mb-2">
+  P = Present • L = Late • T = Attended • A = Absent
+</Text>
       {studentRows.length === 0 ? (
         <Text className="text-slate-500">
           No data for selected week / class.
@@ -365,24 +368,28 @@ const toIso = selectedWeek.endDate;     // "YYYY-MM-DD"
               {item.studentName ?? item.studentId}
             </Text>
 
-           <View className="flex-row justify-between mt-2">
+          <View className="flex-row justify-between mt-2">
   <Text className="text-emerald-600">
     P: {item.presentCount}
+  </Text>
+
+  <Text className="text-amber-600">
+    L: {item.lateCount}
+  </Text>
+
+  <Text className="text-blue-600">
+    T: {item.attendedSessions}
   </Text>
 
   <Text className="text-red-500">
     A: {item.absentCount}
   </Text>
 
-  {/* ✅ NEW — LATE COUNT */}
-  <Text className="text-amber-600">
-    L: {item.lateCount}
-  </Text>
-
   <Text className="text-slate-700">
     {item.percentagePresent.toFixed(1)}%
   </Text>
 </View>
+
 
           </Pressable>
         ))

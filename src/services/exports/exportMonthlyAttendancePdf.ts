@@ -1,9 +1,11 @@
+// mobile/src/services/exports/exportMonthlyAttendancePdf.ts
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
 
 import { getAttendanceSummary } from "../attendanceSummary";
 import { listClasses } from "../classes";
+import { generateAttendanceRows, attendanceTableStyles } from "./generateAttendanceRows";
 
 /* ---------------------------------------------
    Monthly Attendance PDF Export
@@ -19,6 +21,8 @@ export type ExportMonthlyPdfOptions = {
 export async function exportMonthlyAttendancePdf(
   opts: ExportMonthlyPdfOptions
 ) {
+  const { fromIso, toIso, label, classId } = opts;
+
   /* ---------------------------------------------
      Platform guard
   ---------------------------------------------- */
@@ -28,22 +32,15 @@ export async function exportMonthlyAttendancePdf(
     );
   }
 
-  const { fromIso, toIso, label, classId } = opts;
-
   /* ---------------------------------------------
-     Resolve class name (optional)
+     Resolve class name
   ---------------------------------------------- */
   let classLabel = "All Classes";
-
   if (classId) {
     try {
       const classes = await listClasses();
-      const match = classes.find(
-        (c) => c.id === classId || c.classId === classId
-      );
-      if (match) {
-        classLabel = match.name;
-      }
+      const match = classes.find(c => c.id === classId || c.classId === classId);
+      if (match) classLabel = match.name;
     } catch (err) {
       console.warn("Failed to resolve class name", err);
     }
@@ -67,23 +64,9 @@ export async function exportMonthlyAttendancePdf(
   }
 
   /* ---------------------------------------------
-     Build table rows
+     Build table rows with performance coloring
   ---------------------------------------------- */
-  const rowsHtml = summaries
-    .map(
-      (s, idx) => `
-        <tr>
-          <td>${idx + 1}</td>
-          <td>${s.studentName ?? s.studentId}</td>
-          <td>${s.presentCount}</td>
-          <td>${s.absentCount}</td>
-          <td>${s.lateCount}</td>
-          <td>${s.totalSessions}</td>
-          <td>${s.percentagePresent.toFixed(1)}%</td>
-        </tr>
-      `
-    )
-    .join("");
+  const rowsHtml = generateAttendanceRows(summaries);
 
   /* ---------------------------------------------
      HTML Template
@@ -94,37 +77,24 @@ export async function exportMonthlyAttendancePdf(
 <head>
   <meta charset="utf-8" />
   <style>
+    ${attendanceTableStyles}
+
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
       padding: 24px;
       color: #111;
     }
+
     h1 {
       text-align: center;
-      margin-bottom: 4px;
+      margin-bottom: 6px;
     }
+
     .meta {
       text-align: center;
-      margin-bottom: 24px;
+      margin-bottom: 20px;
       font-size: 14px;
       color: #555;
-    }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 12px;
-    }
-    th, td {
-      border: 1px solid #ddd;
-      padding: 6px 8px;
-      text-align: center;
-    }
-    th {
-      background: #f3f4f6;
-      font-weight: 600;
-    }
-    tr:nth-child(even) {
-      background: #fafafa;
     }
   </style>
 </head>
@@ -141,11 +111,11 @@ export async function exportMonthlyAttendancePdf(
       <tr>
         <th>#</th>
         <th>Student</th>
-        <th>Present</th>
-        <th>Absent</th>
-        <th>Late</th>
-        <th>Total</th>
-        <th>%</th>
+        <th class="present">Present</th>
+        <th class="absent">Absent</th>
+        <th class="late">Late</th>
+        <th class="total">Total</th>
+        <th class="percent">%</th>
       </tr>
     </thead>
     <tbody>
@@ -160,7 +130,6 @@ export async function exportMonthlyAttendancePdf(
      Generate PDF
   ---------------------------------------------- */
   const result = await Print.printToFileAsync({ html });
-
   if (!result?.uri) {
     throw new Error("Failed to generate PDF file");
   }

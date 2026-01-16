@@ -285,6 +285,9 @@ useEffect(() => {
         Students ({summaries.length})
       </Text>
 
+<Text className="text-ml text-slate-700 mb-2">
+  P = Present • L = Late • T = Attended • A = Absent
+</Text>
       {computing ? (
         <ActivityIndicator />
       ) : summaries.length === 0 ? (
@@ -316,13 +319,16 @@ useEffect(() => {
     P: {s.presentCount}
   </Text>
 
-  <Text className="text-red-500">
-    A: {s.absentCount}
-  </Text>
-
-  {/* ✅ NEW — LATE COUNT */}
   <Text className="text-amber-600">
     L: {s.lateCount}
+  </Text>
+
+  <Text className="text-blue-600">
+    T: {s.attendedSessions}
+  </Text>
+
+  <Text className="text-red-500">
+    A: {s.absentCount}
   </Text>
 
   <Text className="text-slate-700">
