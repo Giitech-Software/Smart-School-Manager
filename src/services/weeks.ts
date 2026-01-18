@@ -88,27 +88,54 @@ export async function autoGenerateWeeksForTerm(
   let weekNumber = 1;
   let created = 0;
 
-  while (current <= end) {
-    const weekStart = new Date(current);
-    const weekEnd = new Date(current);
-    weekEnd.setDate(weekEnd.getDate() + 4);
-
-    if (weekEnd > end) {
-      weekEnd.setTime(end.getTime());
-    }
-
-    await addDoc(ref, {
-      termId,
-      weekNumber,
-      startDate: weekStart.toISOString().slice(0, 10),
-      endDate: weekEnd.toISOString().slice(0, 10),
-      createdAt: new Date(),
-    });
-
-    created++;
-    weekNumber++;
-    current.setDate(current.getDate() + 7);
+ while (current <= end) {
+  // ⛔ Skip weekends
+  if (current.getDay() === 6) {
+    current.setDate(current.getDate() + 2);
+    continue;
   }
+  if (current.getDay() === 0) {
+    current.setDate(current.getDate() + 1);
+    continue;
+  }
+
+  // ✅ Force week start = Monday
+  while (current.getDay() !== 1 && current > new Date(startDate)) {
+  current.setDate(current.getDate() - 1);
+}
+
+  const weekStart = new Date(current);
+
+  // ✅ Force week end = Friday
+  const weekEnd = new Date(weekStart);
+  while (weekEnd.getDay() !== 5) {
+    weekEnd.setDate(weekEnd.getDate() + 1);
+  }
+
+  // clamp inside term
+  if (weekStart < start) {
+    weekStart.setTime(start.getTime());
+  }
+  if (weekEnd > end) {
+    weekEnd.setTime(end.getTime());
+  }
+
+  await addDoc(ref, {
+    termId,
+    weekNumber,
+    startDate: weekStart.toISOString().slice(0, 10),
+    endDate: weekEnd.toISOString().slice(0, 10),
+    createdAt: new Date(),
+  });
+
+  created++;
+  weekNumber++;
+
+  // ➡️ move to next Monday
+  current = new Date(weekEnd);
+  current.setDate(current.getDate() + 3);
+}
+
 
   return created;
 }

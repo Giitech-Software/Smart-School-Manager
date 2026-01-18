@@ -4,9 +4,10 @@ export type Student = {
   id: string;
   shortId?: string;
 
-  name?: string;
+  name?: string; 
   rollNo?: string;
 
+   studentId?: string;      // ✅ NEW (display ID) 
   /** Short class identifier (slug like "business-management") */
   classId?: string;
 

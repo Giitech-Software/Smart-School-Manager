@@ -17,6 +17,11 @@ const originalDatesRef = React.useRef({
   startDate: "",
   endDate: "",
 });
+function isWeekend(dateStr: string) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
 
   useEffect(() => {
     (async () => {
@@ -50,6 +55,14 @@ originalDatesRef.current = {
     Alert.alert("Validation", "All fields are required.");
     return;
   }
+// ⚠️ Weekend warning (non-blocking)
+if (isWeekend(term.startDate) || isWeekend(term.endDate)) {
+  Alert.alert(
+    "Weekend dates",
+    "The term start or end date falls on a weekend. Weeks will still be generated from Monday to Friday.",
+    [{ text: "Continue" }]
+  );
+}
 
   const datesChanged =
     term.startDate !== originalDatesRef.current.startDate ||
@@ -105,6 +118,13 @@ originalDatesRef.current = {
     ]);
   }
 async function handleGenerateWeeks() {
+  if (isWeekend(term!.startDate) || isWeekend(term!.endDate)) {
+  Alert.alert(
+    "Note",
+    "This term includes weekend dates. Generated weeks will still follow Monday–Friday."
+  );
+}
+
   Alert.alert(
     "Generate weeks",
     "This will automatically create all weeks for this term. This cannot be undone.",

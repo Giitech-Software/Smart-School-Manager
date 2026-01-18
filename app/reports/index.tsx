@@ -39,21 +39,27 @@ export default function ReportsDashboard() {
   /* ------------------------------------------------------------------ */
   /* AGGREGATE TOTALS */
   /* ------------------------------------------------------------------ */
-  const totals = useMemo(() => {
-    let present = 0, absent = 0, late = 0;
-    for (const r of globalSummary) {
-      present += Number(r.presentCount ?? 0);
-      absent += Number(r.absentCount ?? 0);
-      late += Number(r.lateCount ?? 0);
-    }
-    const total = present + absent + late;
-    return {
-      present,
-      absent,
-      late,
-      pct: total === 0 ? 0 : (present / total) * 100,
-    };
-  }, [globalSummary]);
+ const totals = useMemo(() => {
+  let present = 0, absent = 0, late = 0;
+
+  for (const r of globalSummary) {
+    present += Number(r.presentCount ?? 0);
+    absent += Number(r.absentCount ?? 0);
+    late += Number(r.lateCount ?? 0);
+  }
+
+  const attended = present + late;
+  const total = attended + absent;
+
+  return {
+    present,
+    late,
+    absent,
+    attended, // ✅ NEW
+    pct: total === 0 ? 0 : (attended / total) * 100,
+  };
+}, [globalSummary]);
+
 
   /* ------------------------------------------------------------------ */
   /* TILE COMPONENT */
@@ -180,6 +186,12 @@ export default function ReportsDashboard() {
         {totals.late}
       </Text>
     </View> 
+<View>
+  <Text className="text-xs text-slate-500">Attended</Text>
+  <Text className="text-lg font-bold text-sky-600">
+    {totals.attended}
+  </Text>
+</View>
 
     <View>
       <Text className="text-xs text-slate-500">Absent</Text>

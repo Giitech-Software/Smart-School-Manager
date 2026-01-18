@@ -45,7 +45,6 @@ async function findClassDocIdForShortId(
 /* ------------------------------------------------------------------ */
 /* CREATE                                                             */
 /* ------------------------------------------------------------------ */
-
 export async function createStudent(
   data: Omit<Student, "id" | "createdAt">
 ): Promise<Student> {
@@ -54,8 +53,27 @@ export async function createStudent(
     createdAt: serverTimestamp(),
   };
 
-  if (data.classId) {
-    const classDocId = await findClassDocIdForShortId(data.classId);
+  // 🔥 CRITICAL: strip undefined values
+  Object.keys(payload).forEach((key) => {
+    if (payload[key] === undefined) {
+      delete payload[key];
+    }
+  });
+
+  // ✅ AUTO-GENERATE studentCode IF MISSING
+  // ✅ AUTO-GENERATE studentId IF MISSING
+if (!payload.studentId) {
+  const snap = await getDocs(
+    query(studentsCollection, orderBy("createdAt", "desc"), limit(1))
+  );
+
+  const next = snap.size + 1;
+  payload.studentId = `STU-${String(next).padStart(3, "0")}`;
+}
+
+
+  if (payload.classId) {
+    const classDocId = await findClassDocIdForShortId(payload.classId);
     if (classDocId) payload.classDocId = classDocId;
   }
 
@@ -64,6 +82,7 @@ export async function createStudent(
 
   return withShortId(ref.id, snap.data());
 }
+
 
 /* ------------------------------------------------------------------ */
 /* UPSERT (🔥 HARDENED AGAINST undefined)                              */

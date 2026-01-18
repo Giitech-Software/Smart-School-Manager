@@ -16,11 +16,29 @@ export default function TermCreate() {
   const [endDate, setEndDate] = useState("");
   const [saving, setSaving] = useState(false);
 
+  function isWeekend(dateStr: string) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
   async function handleSave() {
   if (!name.trim() || !startDate || !endDate) {
-    Alert.alert("Validation", "Name, start date and end date are required.");
-    return;
-  }
+  Alert.alert("Validation", "Name, start date and end date are required.");
+  return;
+}
+
+// ⚠️ ADD HERE
+if (isWeekend(startDate) || isWeekend(endDate)) {
+  Alert.alert(
+    "Weekend dates",
+    "The term start or end date falls on a weekend. Weeks will still be generated from Monday to Friday.",
+    [{ text: "Continue" }]
+  );
+}
+
+setSaving(true);
+
 
   setSaving(true);
   try {

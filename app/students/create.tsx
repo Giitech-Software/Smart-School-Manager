@@ -28,6 +28,7 @@ export default function StudentCreate() {
   const [classesLoading, setClassesLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
 
+
   useEffect(() => {
     let mounted = true;
     (async () => {
@@ -55,10 +56,12 @@ export default function StudentCreate() {
     setLoading(true);
     try {
       await createStudent({
-        name: name.trim(),
-        classId: classId.trim() || undefined,
-        rollNo: rollNo.trim() || undefined,
-      } as any);
+        //to be updated later for the new studentId field
+  name: name.trim(),
+  classId: classId.trim() || undefined,
+  rollNo: rollNo.trim() || undefined,
+} as any);
+
       Alert.alert("Student created");
       router.back();
     } catch (err: any) {
@@ -143,6 +146,7 @@ export default function StudentCreate() {
             placeholder="e.g. Grade 1A"
           />
         )}
+
 
         <Text className="text-sm text-neutral">Roll no (optional)</Text>
         <AppInput

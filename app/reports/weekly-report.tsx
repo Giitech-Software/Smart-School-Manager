@@ -84,7 +84,8 @@ useEffect(() => {
   w[w.length - 1] ??
   null;
 
-setSelectedWeek(currentWeek);
+setSelectedWeek(null);
+
 
     } catch (e) {
       console.error("load weeks/classes", e);
@@ -109,78 +110,47 @@ setSelectedWeek(currentWeek);
   /* LOAD WEEKLY DATA */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
-    if (!selectedWeek) {
-      setStudentRows([]);
-      return;
-    }
+  if (!selectedWeek) {
+    setStudentRows([]);
+    return;
+  }
 
-    (async () => {
-      try {
-        setLoading(true);
-const fromIso = selectedWeek.startDate; // "YYYY-MM-DD"
-const toIso = selectedWeek.endDate;     // "YYYY-MM-DD"
+  (async () => {
+    try {
+      setLoading(true);
+      const fromIso = selectedWeek.startDate;
+      const toIso = selectedWeek.endDate;
 
+      let summaryWithNames: any[] = [];
 
- 
-        // -------- CLASS FILTER --------
-        if (selectedClassKey) {
-          const summaries = await computeClassSummary(
-            selectedClassKey,
-            fromIso,
-            toIso
-          );
-
-          const studs = await listStudents(selectedClassKey).catch(() => []);
-          const nameMap: Record<string, string> = {};
-
-          for (const s of studs) {
-            if (s?.id) {
-            nameMap[s.id] =
-  s.name ?? s.rollNo ?? s.shortId ?? s.id;
-
-            }
-          }
-
-         if (summaries.length === 0) {
-  setStudentRows(
-    studs.map((s) => ({
-      studentId: s.id,
-      studentName: s.name ?? s.rollNo ?? s.id,
-      presentCount: 0,
-      absentCount: 0,
-      lateCount: 0,
-      percentagePresent: 0,
-    }))
-  );
-} else {
-  setStudentRows(
-    summaries.map((r) => ({
-      ...r,
-      studentName: nameMap[r.studentId] ?? r.studentId,
-    }))
-  );
-}
-
-        }
-        // -------- ALL CLASSES --------
-        else {
-          const summary = await getAttendanceSummary({
-            fromIso,
-            toIso,
-            includeStudentName: true,
-          });
-
-          setStudentRows(summary || []);
-        }
-      } catch (e) {
-        console.error("weekly load", e);
-        Alert.alert("Failed to load weekly report");
-        setStudentRows([]);
-      } finally {
-        setLoading(false);
+      if (selectedClassKey) {
+        // ✅ Fetch only this class with names
+        summaryWithNames = await getAttendanceSummary({
+          fromIso,
+          toIso,
+          classId: selectedClassKey,
+          includeStudentName: true,
+        });
+      } else {
+        // ✅ All classes
+        summaryWithNames = await getAttendanceSummary({
+          fromIso,
+          toIso,
+          includeStudentName: true,
+        });
       }
-    })();
-  }, [selectedWeek, selectedClassKey]);
+
+      setStudentRows(summaryWithNames || []);
+    } catch (e) {
+      console.error("weekly load", e);
+      Alert.alert("Failed to load weekly report");
+      setStudentRows([]);
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, [selectedWeek, selectedClassKey]);
+
 
   /* ------------------------------------------------------------------ */
   /* LOADING STATE */

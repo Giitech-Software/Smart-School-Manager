@@ -109,11 +109,12 @@ export async function exportWeeklyAttendancePdf(opts: ExportWeeklyPdfOptions) {
       <tr>
         <th>#</th>
         <th>Student</th>
-        <th class="present">Present</th>
-        <th class="absent">Absent</th>
-        <th class="late">Late</th>
-        <th class="total">Total</th>
-        <th class="percent">%</th>
+       <th class="present">Present</th>
+<th class="late">Late</th>
+<th class="total">Attended</th>
+<th class="absent">Absent</th>
+<th class="percent">%</th>
+
       </tr>
     </thead>
     <tbody>

@@ -29,12 +29,12 @@ export function generateAttendanceRows(
           <td class="${rowClass}" style="text-align:left">
             ${s.studentName ?? s.studentId}
           </td>
-          <td class="present">${s.presentCount}</td>
-          <td class="absent">${s.absentCount}</td>
-          <td class="late">${s.lateCount}</td>
+        <td class="present">${s.presentCount}</td>
+<td class="late">${s.lateCount}</td>
 ${includeTotal ? `<td class="total">${s.attendedSessions}</td>` : ""}
-          <td class="percent">${s.percentagePresent.toFixed(1)}%</td>
-        </tr>
+<td class="absent">${s.absentCount}</td>
+<td class="percent">${s.percentagePresent.toFixed(1)}%</td>
+
       `;
     })
     .join("");

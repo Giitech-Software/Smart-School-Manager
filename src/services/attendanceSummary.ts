@@ -165,9 +165,11 @@ const percentage =
 export async function computeClassSummary(
   classId: string,
   fromIso: string,
-  toIso: string
-): Promise<AttendanceSummary[]> {
+  toIso: string,
+  includeStudentName = false
+): Promise<(AttendanceSummary & { studentName?: string })[]> {
   try {
+    // 1️⃣ Fetch attendance for this class
     const q = query(
       attendanceCollection,
       where("classId", "==", classId),
@@ -178,7 +180,6 @@ export async function computeClassSummary(
     const snap = await getDocs(q);
 
     const byStudent = new Map<string, AttendanceRecord[]>();
-
     for (const d of snap.docs) {
       const rec = { id: d.id, ...(d.data() as any) } as AttendanceRecord;
       const arr = byStudent.get(rec.studentId) ?? [];
@@ -186,8 +187,25 @@ export async function computeClassSummary(
       byStudent.set(rec.studentId, arr);
     }
 
-    const out: AttendanceSummary[] = [];
+    const out: (AttendanceSummary & { studentName?: string })[] = [];
 
+    // 2️⃣ Load all students that appear in these attendance records
+    let nameMap: Record<string, string> = {};
+    if (includeStudentName) {
+      const studentDocs = await Promise.all(
+        Array.from(byStudent.keys()).map((id) =>
+          getDoc(doc(db, "students", id))
+        )
+      );
+      studentDocs.forEach((snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          nameMap[snap.id] = data.name ?? data.rollNo ?? data.shortId ?? snap.id;
+        }
+      });
+    }
+
+    // 3️⃣ Compute summary per student
     for (const [studentId, recs] of byStudent.entries()) {
       let present = 0;
       let absent = 0;
@@ -200,30 +218,28 @@ export async function computeClassSummary(
         else if (s === "late") late++;
       }
 
-    const totalSchoolDays = present + late + absent;
-const attendedSessions = present + late;
+      const totalSchoolDays = present + late + absent;
+      const attendedSessions = present + late;
+      const score = present + late * 0.5;
+      const percentage =
+        totalSchoolDays === 0
+          ? 0
+          : Number(((score / totalSchoolDays) * 100).toFixed(2));
 
-const score = present + late * 0.5;
-
-const percentage =
-  totalSchoolDays === 0
-    ? 0
-    : Number(((score / totalSchoolDays) * 100).toFixed(2));
-
-
-           out.push({
-  studentId,
-  presentCount: present,
-  lateCount: late,
-  absentCount: absent,
-
-  attendedSessions,
-  totalSchoolDays,
-
-  percentagePresent: percentage,
-});
-
+      out.push({
+        studentId,
+        presentCount: present,
+        lateCount: late,
+        absentCount: absent,
+        attendedSessions,
+        totalSchoolDays,
+        percentagePresent: percentage,
+        studentName: includeStudentName ? nameMap[studentId] ?? studentId : undefined,
+      });
     }
+
+    // 4️⃣ Sort by highest attendance
+    out.sort((a, b) => b.percentagePresent - a.percentagePresent);
 
     return out;
   } catch (err) {
@@ -290,10 +306,15 @@ export async function getAttendanceSummary(
       students.map(async (student) => {
         const summary = await computeAttendanceSummaryForStudent(student.id, fromIso, toIso);
         // pick the best available student name
-        const studentName =
-          opts.includeStudentName
-            ? student.name ?? student.displayName ?? student.rollNo ?? student.shortId ?? student.id
-            : undefined;
+       const studentName =
+  opts.includeStudentName
+    ? student.name          // ✅ FIRST PRIORITY: actual student name
+      ?? student.rollNo     // optional fallback
+      ?? student.studentId  // new auto-generated student ID
+      ?? student.shortId    // fallback for old records
+      ?? student.id         // final fallback
+    : undefined;
+
         return { ...summary, studentName };
       })
     );

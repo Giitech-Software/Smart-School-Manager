@@ -91,6 +91,8 @@ const router = useRouter();
       </View>
     );
   }
+const attendedCount =
+  (summary.presentCount ?? 0) + (summary.lateCount ?? 0);
 
   return (
     <View className="flex-1 p-4 bg-slate-50">
@@ -151,6 +153,12 @@ const router = useRouter();
               {summary.lateCount}
             </Text>
           </View>
+<View>
+  <Text className="text-xs text-slate-500">Attended</Text>
+  <Text className="text-lg font-bold text-sky-700">
+    {attendedCount}
+  </Text>
+</View>
 
           <View>
             <Text className="text-xs text-slate-500">Absent</Text>
