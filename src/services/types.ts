@@ -10,10 +10,13 @@ export type Student = {
    studentId?: string;      // ✅ NEW (display ID) 
   /** Short class identifier (slug like "business-management") */
   classId?: string;
-
+// 👇 ADD THIS
+  isActive?: boolean;
   /** Firestore document id of class (authoritative) */
   classDocId?: string;
-
+// ✅ add these
+  faceEmbedding?: number[] | null;
+  faceEnrolledAt?: string | null;
   fingerprintId?: string;
 
   createdAt?: any;

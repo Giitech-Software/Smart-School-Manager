@@ -1,3 +1,4 @@
+// mobile/src/services/qr.ts
 import * as Crypto from "expo-crypto";
 
 /**

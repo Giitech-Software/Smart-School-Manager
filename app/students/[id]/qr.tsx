@@ -5,6 +5,7 @@ import { useLocalSearchParams } from "expo-router";
 import { getStudentById } from "../../../src/services/students";
 import UserQrCode from "../../../components/UserQrCode";
 import { generateQrPayload } from "../../../src/services/qr";
+import { getStudentLabel } from "../../../src/utils/studentLabel";
 
 export default function StudentQrScreen() {
   const { id } = useLocalSearchParams();
@@ -20,11 +21,13 @@ export default function StudentQrScreen() {
       if (!s) return;
       setStudent(s);
 
-      const qr = await generateQrPayload(
-        String(s.id),
-        "student",
-        s.classId
-      );
+    const qr = await generateQrPayload(
+  s.studentId ?? s.id, // ✅ use human-readable studentId
+  "student",
+  s.classId
+);
+
+
 
       setPayload(qr);
     })();
@@ -40,9 +43,10 @@ export default function StudentQrScreen() {
 
   return (
     <View className="flex-1 bg-white p-6 items-center">
-      <Text className="text-2xl font-semibold mb-4">
-        {student.name}'s QR Code
-      </Text>
+     <Text className="text-2xl font-semibold mb-4">
+  {getStudentLabel(student)}'s QR Code
+</Text>
+
 
       <UserQrCode payload={payload} />
 

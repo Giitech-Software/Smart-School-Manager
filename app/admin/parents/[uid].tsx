@@ -123,24 +123,26 @@ export default function AdminParentWards() {
         return n;
       });
 
-      Alert.alert(
-        "Ward Unassigned",
-        `${student.name ?? "Student"} removed from ${
-          parent?.displayName ?? parent?.email
-        }`
-      );
+     Alert.alert(
+  "Ward Unassigned",
+  `${student.name}${student.studentId ? ` (${student.studentId})` : ""} removed from ${
+    parent?.displayName ?? parent?.email
+  }`
+);
+
       return;
     }
 
     // ⚠️ assigned to ANOTHER parent
     if (globalWard && globalWard.parentUid !== uid) {
-      Alert.alert(
-        "Already Assigned",
-        `${student.name ?? "Student"} is already assigned to ${
-          globalWard.parentName
-        }.\n\nDo you want to move them to ${
-          parent?.displayName ?? parent?.email
-        }?`,
+    Alert.alert(
+  "Already Assigned",
+  `${student.name}${student.studentId ? ` (${student.studentId})` : ""} is already assigned to ${
+    globalWard.parentName
+  }.\n\nDo you want to move them to ${
+    parent?.displayName ?? parent?.email
+  }?`,
+
         [
           { text: "Cancel", style: "cancel" },
           {
@@ -184,7 +186,9 @@ export default function AdminParentWards() {
     return students.filter(
       (s) =>
         s.name?.toLowerCase().includes(q) ||
-        s.rollNo?.toLowerCase().includes(q)
+s.studentId?.toLowerCase().includes(q) ||
+s.rollNo?.toLowerCase().includes(q)
+
     );
   }, [students, search]);
 
@@ -214,7 +218,7 @@ export default function AdminParentWards() {
        <AppInput
   value={search}
   onChangeText={setSearch}
-  placeholder="Search student by name or roll number"
+  placeholder="Search student by name, id or roll number"
   className="text-base"
 />
 
@@ -233,10 +237,14 @@ export default function AdminParentWards() {
             <View className="bg-white rounded-2xl p-4 mb-3">
               <View className="flex-row justify-between items-center">
                 <View>
-                  <Text className="font-semibold">{item.name}</Text>
-                  <Text className="text-sm text-neutral">
-                    {item.rollNo ?? "—"}
-                  </Text>
+                 <Text className="font-semibold">
+  {item.name}
+  {item.studentId
+    ? ` (${item.studentId})`
+    : item.rollNo
+    ? ` (${item.rollNo})`
+    : ""}
+</Text>
 
                   {assignedElsewhere && (
                     <Text className="text-xs text-amber-600 mt-1">

@@ -4,9 +4,11 @@
     "strict": true,
     "noEmit": true,
     "moduleResolution": "bundler",
+    
     "paths": {
       "@/*": [
-        "./*"
+        "./*",
+        
       ]
     }
   },

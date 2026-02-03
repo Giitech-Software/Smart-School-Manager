@@ -200,8 +200,12 @@ export async function computeClassSummary(
       studentDocs.forEach((snap) => {
         if (snap.exists()) {
           const data = snap.data();
-          nameMap[snap.id] = data.name ?? data.rollNo ?? data.shortId ?? snap.id;
-        }
+        nameMap[snap.id] =
+  data.name
+  ?? data.studentId
+  ?? data.rollNo
+  ?? "";
+ }
       });
     }
 
@@ -234,8 +238,8 @@ export async function computeClassSummary(
         attendedSessions,
         totalSchoolDays,
         percentagePresent: percentage,
-        studentName: includeStudentName ? nameMap[studentId] ?? studentId : undefined,
-      });
+      studentName: includeStudentName ? nameMap[studentId] : undefined,
+  });
     }
 
     // 4️⃣ Sort by highest attendance
@@ -305,17 +309,17 @@ export async function getAttendanceSummary(
     const summaries = await Promise.all(
       students.map(async (student) => {
         const summary = await computeAttendanceSummaryForStudent(student.id, fromIso, toIso);
-        // pick the best available student name
-       const studentName =
-  opts.includeStudentName
-    ? student.name          // ✅ FIRST PRIORITY: actual student name
-      ?? student.rollNo     // optional fallback
-      ?? student.studentId  // new auto-generated student ID
-      ?? student.shortId    // fallback for old records
-      ?? student.id         // final fallback
-    : undefined;
+   const studentName = opts.includeStudentName ? student.name ?? "" : undefined;
+const displayId   = student.studentId ?? student.rollNo ?? "";
 
-        return { ...summary, studentName };
+return {
+  ...summary,
+  studentId: student.id,   // ✅ ALWAYS Firestore doc id
+  displayId,               // 🏷 for UI only
+  studentName,
+};
+
+
       })
     );
 

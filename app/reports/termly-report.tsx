@@ -271,8 +271,10 @@ export default function TermlyReport() {
             className="bg-white p-4 rounded-xl mb-3 shadow"
           >
             <Text className="font-semibold">
-              {item.studentName ?? item.studentId}
-            </Text>
+  {item.studentName}
+  {item.displayId ? ` (${item.displayId})` : ""}
+</Text>
+
 
             <View className="flex-row justify-between mt-2">
   <Text className="text-emerald-600">

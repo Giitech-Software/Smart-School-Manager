@@ -27,6 +27,7 @@ export default function StudentCreate() {
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
   const [showDropdown, setShowDropdown] = useState(false);
+const [studentId, setStudentId] = useState("");
 
 
   useEffect(() => {
@@ -55,11 +56,13 @@ export default function StudentCreate() {
 
     setLoading(true);
     try {
-      await createStudent({
-        //to be updated later for the new studentId field
+     await createStudent({
   name: name.trim(),
   classId: classId.trim() || undefined,
   rollNo: rollNo.trim() || undefined,
+
+  // ✅ OPTIONAL manual studentId
+  studentId: studentId.trim() || undefined,
 } as any);
 
       Alert.alert("Student created");
@@ -115,7 +118,7 @@ export default function StudentCreate() {
   value={name}
   onChangeText={setName}
   placeholder="e.g. Adwoa Aggrey"
-  className="border p-3 rounded mb-3 bg-white"
+  className="border p-3 rounded-xl mb-3 bg-white"
 />
 
 
@@ -127,7 +130,7 @@ export default function StudentCreate() {
           <>
             <Pressable
               onPress={() => setShowDropdown(true)}
-              className="border p-3 rounded mb-3 bg-white flex-row justify-between items-center"
+              className="border p-3 rounded-xl mb-3 bg-white flex-row justify-between items-center"
             >
               <Text className={classId ? "text-dark" : "text-neutral"}>
                 {classId
@@ -142,23 +145,32 @@ export default function StudentCreate() {
           <TextInput
             value={classId}
             onChangeText={setClassId}
-            className="border p-3 rounded mb-3 bg-white"
+            className="border p-3 rounded-xl mb-3 bg-white"
             placeholder="e.g. Grade 1A"
           />
         )}
-
+<Text className="text-sm text-neutral">
+  Student ID
+</Text>
+<AppInput
+  value={studentId}
+  onChangeText={setStudentId}
+  placeholder="e.g. STU-045 (leave empty to auto-generate)"
+  className="border p-3 rounded-xl mb-3 bg-white"
+/>
+ 
 
         <Text className="text-sm text-neutral">Roll no (optional)</Text>
         <AppInput
   value={rollNo}
   onChangeText={setRollNo}
   placeholder="e.g. 12"
-  className="border p-3 rounded mb-4 bg-white"
+  className="border p-3 rounded-xl mb-4 bg-white"
 />
 
         <Pressable
           onPress={handleCreate}
-          className="bg-primary py-3 rounded"
+          className="bg-primary py-3 rounded-xl"
           disabled={loading}
           style={loading ? { opacity: 0.7 } : undefined}
         >

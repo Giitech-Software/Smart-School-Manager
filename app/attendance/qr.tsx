@@ -230,44 +230,57 @@ export default function QRScanner(): JSX.Element {
 
       setProcessing(true);
       try {
-        // Resolve scannedStudentId to an actual student doc if possible:
-        let studentDoc: any = null;
-        try {
-          studentDoc = await getStudentById(scannedStudentId); // returns student or null
-        } catch (e) {
-          studentDoc = null;
-        }
+        // Resolve scannedStudentId (studentId field) → Firestore document
+let studentDoc: any = null;
 
-        // fallback: lookup by rollNo
-        if (!studentDoc) {
-          try {
-            const q1 = query(collection(db, "students"), where("rollNo", "==", scannedStudentId));
-            const snap1 = await getDocs(q1);
-            if (snap1.docs.length > 0) {
-              const d = snap1.docs[0];
-              studentDoc = { id: d.id, ...(d.data() as any) };
-            }
-          } catch (e) {
-            // nothing
-          }
-        }
+// 1️⃣ Try lookup by studentId field (PRIMARY)
+try {
+  const q1 = query(
+    collection(db, "students"),
+    where("studentId", "==", scannedStudentId)
+  );
+  const snap1 = await getDocs(q1);
+  if (snap1.docs.length > 0) {
+    const d = snap1.docs[0];
+    studentDoc = { id: d.id, ...(d.data() as any) };
+  }
+} catch {}
 
-        if (!studentDoc) {
-          Alert.alert("Unknown student", "Scanned id does not match any student record.");
-          setProcessing(false);
-          setScanned(false);
-          setScannedPayload(null);
-          return;
-        }
+// 2️⃣ Fallback: rollNo (LAST RESORT)
+if (!studentDoc) {
+  try {
+    const q2 = query(
+      collection(db, "students"),
+      where("rollNo", "==", scannedStudentId)
+    );
+    const snap2 = await getDocs(q2);
+    if (snap2.docs.length > 0) {
+      const d = snap2.docs[0];
+      studentDoc = { id: d.id, ...(d.data() as any) };
+    }
+  } catch {}
+}
+
+// 3️⃣ Final safety
+if (!studentDoc) {
+  Alert.alert(
+    "Unknown student",
+    "Scanned ID does not match any student record."
+  );
+  setProcessing(false);
+  setScanned(false);
+  setScannedPayload(null);
+  return;
+}
 
         // Register attendance using unified function (guards duplicates)
-        try {
+        try { 
           await registerAttendanceUnified({
             studentId: String(studentDoc.id),
             classId: finalClassId,
             mode,
             biometric: false,
-          });
+          });  
 
           try {
             await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -448,11 +461,25 @@ export default function QRScanner(): JSX.Element {
           >
 
             {scannedPayload ? (
-              <View className="bg-white/10 border border-white/10 rounded-xl p-4">
-                <Text className="text-white/70 text-sm">Scanned:</Text>
-                <Text className="text-white font-semibold mt-1">
-                  {scannedPayload}
-                </Text>
+  <View className="bg-white/10 border border-white/10 rounded-xl p-4">
+    <Text className="text-white/70 text-sm">Scanned:</Text>
+    <Text className="text-white font-semibold mt-1">
+      {(() => {
+        try {
+          const parsed = JSON.parse(scannedPayload);
+          // Show only userId, role, classId like the PDF
+          return JSON.stringify({
+            userId: parsed.userId,
+            role: parsed.role,
+            classId: parsed.classId ?? undefined,
+          }, null, 2);
+        } catch {
+          // fallback for plain strings
+          return scannedPayload;
+        }
+      })()}
+    </Text>
+
 
                 <View className="flex-row mt-4 space-x-3">
                   <Pressable

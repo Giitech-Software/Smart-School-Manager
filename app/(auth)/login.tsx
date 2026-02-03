@@ -123,7 +123,7 @@ if (user.role === "parent" || (user.wards?.length ?? 0) > 0) {
   onChangeText={setEmail}
   placeholder="you@example.com"
   keyboardType="email-address"
-  className="border p-3 rounded mb-3 bg-white"
+  className="border p-3 rounded-xl mb-3 bg-white"
 />
 
 
@@ -134,7 +134,7 @@ if (user.role === "parent" || (user.wards?.length ?? 0) > 0) {
   onChangeText={setPassword}
   placeholder="Your password"
   secureTextEntry={!showPassword}
-  className="border p-3 rounded mb-1 bg-white"
+  className="border p-3 rounded-xl mb-1 bg-white"
   onSubmitEditing={handleLogin}
 />
  
@@ -160,7 +160,7 @@ if (user.role === "parent" || (user.wards?.length ?? 0) > 0) {
           {/* Login button */}
           <Pressable
             onPress={handleLogin}
-            className="bg-primary py-3 rounded mb-3"
+            className="bg-primary py-3 rounded-xl mb-3"
             disabled={loading}
           >
             <Text className="text-white text-center text-xl">

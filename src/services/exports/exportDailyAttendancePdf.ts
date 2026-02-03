@@ -95,7 +95,6 @@ export async function exportDailyAttendancePdf(opts: ExportDailyPdfOptions) {
 <th class="late">Late</th>
 <th class="absent">Absent</th>
 <th class="percent">%</th>
-        <th>%</th>
       </tr>
     </thead>
     <tbody>

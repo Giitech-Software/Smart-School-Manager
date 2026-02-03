@@ -121,20 +121,25 @@ useEffect(() => {
     setComputing(true);
 
     const rows = await Promise.all(
-      filteredStudents.map(async (s) => {
-        const sum = await computeAttendanceSummaryForStudent(
-          s.id,
-          monthRange.fromIso,
-          monthRange.toIso
-        );
-        return {
-          ...sum,
-          studentName:
-            s.name ?? s.displayName ?? s.rollNo ?? s.id,
-        };
-      })
+  filteredStudents.map(async (s) => {
+    const sum = await computeAttendanceSummaryForStudent(
+      s.id,
+      monthRange.fromIso,
+      monthRange.toIso
     );
 
+    return {
+      ...sum,
+      studentId: s.id, // still needed internally for routing
+      studentName: s.name ?? s.displayName ?? "Unknown Student",
+      displayId: s.studentId ?? s.rollNo ?? null, // <--- THIS FIXES THE DISPLAY
+    };
+  })
+);
+
+
+
+  
     rows.sort((a, b) => b.percentagePresent - a.percentagePresent);
     setSummaries(rows);
     setComputing(false);
@@ -313,7 +318,11 @@ useEffect(() => {
 
             className="bg-white p-4 rounded-xl mb-3 shadow"
           >
-            <Text className="font-semibold">{s.studentName}</Text>
+           <Text className="font-semibold">
+  {s.studentName}
+  {s.displayId ? ` (${s.displayId})` : ""}
+</Text>
+
 <View className="flex-row justify-between mt-2">
   <Text className="text-emerald-600">
     P: {s.presentCount}

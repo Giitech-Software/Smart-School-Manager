@@ -21,8 +21,14 @@ import { getClassById } from "./classes";
 const studentsCollection = collection(db, "students");
 
 function withShortId(id: string, data: any): Student {
-  return { id, shortId: id.slice(0, 6), ...(data as any) } as Student;
+  return {
+    id,
+    shortId: id.slice(0, 6),
+    ...data,
+    studentId: data.studentId ?? data.studentCode, // prefer actual studentId, fallback to studentCode
+  } as Student;
 }
+
 
 /** Resolve Firestore class doc id using short classId */
 async function findClassDocIdForShortId(
@@ -52,6 +58,10 @@ export async function createStudent(
     ...data,
     createdAt: serverTimestamp(),
   };
+// allow isActive in student writes
+if (typeof data.isActive === "boolean") {
+  payload.isActive = data.isActive;
+}
 
   // 🔥 CRITICAL: strip undefined values
   Object.keys(payload).forEach((key) => {
@@ -67,9 +77,21 @@ if (!payload.studentId) {
     query(studentsCollection, orderBy("createdAt", "desc"), limit(1))
   );
 
-  const next = snap.size + 1;
-  payload.studentId = `STU-${String(next).padStart(3, "0")}`;
+  let nextNum = 1; // default for first student
+
+  if (!snap.empty) {
+    const lastStudent = snap.docs[0].data();
+    const lastId: string = lastStudent?.studentId ?? lastStudent?.studentCode ?? "STU-000";
+
+    const match = lastId.match(/\d+$/); // extract numeric part
+    if (match) {
+      nextNum = Number(match[0]) + 1;
+    }
+  }
+
+  payload.studentId = `STU-${String(nextNum).padStart(3, "0")}`;
 }
+
 
 
   if (payload.classId) {

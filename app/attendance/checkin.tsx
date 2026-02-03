@@ -60,8 +60,10 @@ function StudentRow({
       }`}
     >
       <Text className={`${hasBiometric ? "text-green-800" : "text-gray-700"} mb-2`}>
-        {student.name} {hasBiometric ? "(Enrolled)" : "(No biometric)"}
-      </Text>
+  {student.name} {student.studentId ?? student.rollNo ? `(${student.studentId ?? student.rollNo})` : ""} 
+  {hasBiometric ? " (Enrolled)" : " (No biometric)"}
+</Text>
+
 
       <View className="flex-row">
         <Pressable
@@ -338,6 +340,7 @@ if (!attendanceCheck.allowed) {
           />
         </Pressable>
 
+
         {/* QR Actions */}
         <Pressable
           onPress={() => goToQR("in")}
@@ -366,6 +369,23 @@ if (!attendanceCheck.allowed) {
           </View>
           <MaterialIcons name="arrow-forward-ios" size={16} color="#64748B" />
         </Pressable>
+<Pressable
+  onPress={() =>
+    router.push({
+      pathname: "/attendance/face",
+      params: {
+        classId: selectedClassId,
+        mode: "in",
+      },
+    })
+  }
+  className="flex-row items-center bg-sky-600 px-4 py-3 rounded-xl mt-3"
+>
+  <MaterialIcons name="face-retouching-natural" size={28} color="white" />
+  <Text className="text-white font-semibold ml-3">
+    Face Attendance
+  </Text>
+</Pressable>
 
        {/* How it works - hide if biometric expanded */}
 {!showBiometric && (
@@ -390,8 +410,6 @@ if (!attendanceCheck.allowed) {
 
   </View>
 )}
-
-
         <View style={{ height: 20 }} />
       </>
     );

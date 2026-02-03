@@ -14,6 +14,9 @@ import { getStudentById, upsertStudent } from "../../src/services/students";
 import type { Student } from "../../src/services/types";
 import { MaterialIcons } from "@expo/vector-icons";
 
+type _CHECK = Student["faceEmbedding"];
+
+
 export default function StudentDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -93,26 +96,38 @@ Edit Student
         <TextInput
           value={student.name}
           onChangeText={(t) => setStudent({ ...student, name: t })}
-          className="border p-3 rounded mb-3 bg-white"
+          className="border p-3 rounded-xl mb-3 bg-white"
         />
+<Text className="text-sm text-neutral">Student ID</Text>
+<TextInput
+  value={student.studentId ?? ""}
+  onChangeText={(t) =>
+    setStudent({
+      ...student,
+      studentId: t.trim() || undefined, // ✅ critical
+    })
+  }
+  placeholder="Leave empty to keep or auto-generate"
+  className="border p-3 rounded-xl mb-3 bg-white"
+/>
 
         <Text className="text-sm text-neutral">Class</Text>
         <TextInput
           value={student.classId ?? ""}
           onChangeText={(t) => setStudent({ ...student, classId: t })}
-          className="border p-3 rounded mb-3 bg-white"
+          className="border p-3 rounded-xl mb-3 bg-white"
         />
 
-        <Text className="text-sm text-neutral">Roll no</Text>
+        <Text className="text-sm text-neutral">Roll no (optional)</Text>
         <TextInput
           value={student.rollNo ?? ""}
           onChangeText={(t) => setStudent({ ...student, rollNo: t })}
-          className="border p-3 rounded mb-4 bg-white"
+          className="border p-3 rounded-xl mb-4 bg-white"
         />
 
         <Pressable
           onPress={handleSave}
-          className="bg-primary py-3 rounded"
+          className="bg-primary py-3 rounded-xl"
           disabled={saving}
         >
           <Text className="text-white text-center">
@@ -130,6 +145,88 @@ Edit Student
             Enroll Biometric
           </Text>
         </Pressable>
+
+       <Pressable
+  onPress={() =>
+    router.push({
+      pathname: "/admin/FaceEnrollment",
+      params: { studentId: student.id },
+    })
+  }
+>
+  <Text>Enroll / Update Face</Text>
+</Pressable>
+
+
+{/* ✅ FACE STATUS (ADD THIS — nothing removed) */}
+<View
+  className={`mt-4 p-4 rounded-xl ${
+    student.faceEmbedding ? "bg-green-100" : "bg-yellow-100"
+  }`}
+>
+  <Text
+    className={`font-semibold ${
+      student.faceEmbedding ? "text-green-800" : "text-yellow-800"
+    }`}
+  >
+    Face recognition
+  </Text>
+
+  <Text className="text-sm mt-1">
+    {student.faceEmbedding
+      ? "Face data is enrolled and ready for attendance."
+      : "Face data not enrolled. Face attendance is disabled."}
+  </Text>
+</View>
+
+
+<View className="mt-3 p-3 rounded-xl bg-white border border-slate-200">
+  <Text className="text-sm text-neutral">
+    Face status:{" "}
+    <Text className="font-semibold">
+      {student.faceEmbedding ? "Enrolled ✅" : "Not enrolled ❌"}
+    </Text>
+  </Text>
+</View>
+
+<Pressable
+  onPress={() => {
+    Alert.alert(
+      "Remove Face Data",
+      "This will permanently remove the student's face data. Face attendance will be disabled until re-enrolled.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Remove",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await upsertStudent({
+                ...student,
+                faceEmbedding: null,
+                faceEnrolledAt: null,
+              });
+
+              Alert.alert("Done", "Face data removed successfully");
+            } catch (err: any) {
+              console.error("Remove face error", err);
+              Alert.alert(
+                "Error",
+                err?.message ?? "Failed to remove face data"
+              );
+            }
+          },
+        },
+      ]
+    );
+  }}
+  className="bg-red-600 py-3 px-4 rounded-xl mt-3"
+>
+  <Text className="text-white text-center font-medium">
+    Remove Face Data
+  </Text>
+</Pressable>
+
       </View>
     </KeyboardAwareScreen>
   );

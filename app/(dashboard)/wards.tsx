@@ -101,18 +101,40 @@ export default function Wards() {
         const wards = await getWardsForParent(auth.currentUser.uid);
         const resolved: WardRow[] = [];
 
-        for (const w of wards) {
-          const snap = await getDoc(doc(db, "students", w.studentId));
-          const data = snap.data();
+       for (const w of wards) {
+  const snap = await getDoc(doc(db, "students", w.studentId));
 
-          resolved.push({
-            studentId: w.studentId,
-            studentName:
-              typeof data?.name === "string" && data.name.trim()
-                ? data.name
-                : "Student",
-          });
-        }
+  // 🚫 Skip deleted / moved students
+  if (!snap.exists()) {
+    continue;
+  }
+
+  const data = snap.data();
+// 👇 ADD THIS
+if (data?.isActive === false) continue;
+  const name =
+    data?.name?.trim()
+      ? data.name
+      : data?.studentId
+      ? data.studentId
+      : data?.rollNo
+      ? data.rollNo
+      : null;
+
+  // 🚫 Still no identity → skip
+  if (!name) continue;
+
+  const label =
+    data?.studentId && data?.name
+      ? `${data.name} (${data.studentId})`
+      : name;
+
+  resolved.push({
+    studentId: w.studentId,
+    studentName: label,
+  });
+}
+
 
         if (mounted) setRows(resolved);
       } catch (e) {

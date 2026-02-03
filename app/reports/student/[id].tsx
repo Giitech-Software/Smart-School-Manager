@@ -2,9 +2,10 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, FlatList } from "react-native";
 import {
-  computeAttendanceSummaryForStudent,
+  getAttendanceSummary,
   getAttendanceForStudentInRange,
 } from "../../../src/services/attendanceSummary";
+
 import { useLocalSearchParams } from "expo-router";
 import { doc, getDoc } from "firebase/firestore"; 
 import { db } from "../../firebase";
@@ -56,7 +57,26 @@ const router = useRouter();
 
         /* ---------------- student name ---------------- */
         const snap = await getDoc(doc(db, "students", studentId));
-        setStudentName(snap.exists() ? snap.data().name ?? "Student" : "Student");
+        if (snap.exists()) {
+  const data = snap.data();
+
+  const displayName =
+    data.name
+      ?? "Student";
+
+  const displayId =
+    data.studentId
+      ?? data.rollNo
+      ?? "";
+
+  setStudentName(
+    displayId
+      ? `${displayName} (${displayId})`
+      : displayName
+  );
+} else {
+  setStudentName("Student");
+}
 
         /* ---------------- date range ---------------- */
         let fromIso = fromIsoParam;
@@ -70,8 +90,14 @@ const router = useRouter();
         }
 
         /* ---------------- summary ---------------- */
-        const s = await computeAttendanceSummaryForStudent(studentId, fromIso, toIso);
-        setSummary(s);
+       const summaries = await getAttendanceSummary({
+  studentId,
+  fromIso,
+  toIso,
+  includeStudentName: true,
+});
+const s = summaries[0]; // only one student
+setSummary(s);
 
         /* ---------------- daily timeline ---------------- */
         const recs = await getAttendanceForStudentInRange(studentId, fromIso, toIso);
@@ -244,3 +270,4 @@ const attendedCount =
     </View>
   );
 }
+

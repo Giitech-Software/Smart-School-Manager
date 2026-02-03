@@ -14,6 +14,7 @@ import * as SecureStore from "expo-secure-store";
 import { getStudentById, upsertStudent } from "../../src/services/students";
 import { biometricKeyForStudent } from "../../src/services/secureKeys";
 import { MaterialIcons } from "@expo/vector-icons";
+import { getStudentLabel } from "../../src/utils/studentLabel";
 
 
 
@@ -89,7 +90,8 @@ export default function EnrollBiometric() {
       }
 
       const auth = await LocalAuthentication.authenticateAsync({
-        promptMessage: `Confirm to enroll ${student.name ?? "student"}`,
+       promptMessage: `Confirm to enroll ${getStudentLabel(student)}`,
+
         cancelLabel: "Cancel",
       });
 
@@ -189,12 +191,10 @@ if (!indexList.includes(studentId)) {
   </Text>
 </View>
         <Text className="text-m text-neutral mb-3">Student</Text>
-        <Text className="font-semibold text-dark">
-          {student.name ?? student.displayName ?? studentId}
-        </Text>
-        <Text className="text-sm text-neutral mt-1">
-          {student.rollNo ? `Roll No: ${student.rollNo}` : null}
-        </Text>
+      <Text className="font-semibold text-dark">
+  {student.name} ({student.studentId ?? student.rollNo ?? "—"})
+</Text>
+
       </View>
 
       <View className="bg-white rounded-2xl p-4 mb-4 shadow">

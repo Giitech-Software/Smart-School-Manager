@@ -23,6 +23,8 @@ import type { Student } from "../../src/services/types";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import AppInput from "@/components/AppInput";
+import { getStudentLabel } from "../../src/utils/studentLabel";
+import { captureRef } from "react-native-view-shot";
 
 /* ---------- small helpers ---------- */
 function escapeHtml(str: string) {
@@ -114,9 +116,11 @@ const router = useRouter();
     if (!q) return students;
     return students.filter((s) => {
       const name = (s.name ?? "").toLowerCase();
-      const shortId = ((s as any).shortId ?? "").toLowerCase();
+     // prefer studentId over id for searching OVER SHORT CODE
+      const sid = (s.studentId ?? "").toLowerCase();
+
       const roll = (s.rollNo ?? "").toLowerCase();
-      return name.includes(q) || shortId.includes(q) || roll.includes(q);
+      return name.includes(q) || sid.includes(q) || roll.includes(q);
     });
   }, [students, query]);
 
@@ -141,8 +145,8 @@ const router = useRouter();
     try {
       const role = "student";
       const classId = s.classId ?? undefined;
-      const payload = await generateQrPayload(s.id, role, classId);
-      const json = JSON.stringify(payload);
+     const payload = await generateQrPayload(s.studentId ?? s.id, role, classId);
+ const json = JSON.stringify(payload);
       setPayloadJson(json);
       setSelected(s);
       setModalVisible(true);
@@ -161,32 +165,23 @@ const router = useRouter();
   }
 
   async function shareQrAsPng() {
-    if (!svgRef.current || !payloadJson) {
-      Alert.alert("No QR", "Nothing to share.");
-      return;
-    }
-
-    svgRef.current.toDataURL(async (dataUrl: string) => {
-      try {
-        const base64 = dataUrl.startsWith("data:") ? dataUrl.split(",")[1] : dataUrl;
-        const filename = `qr-${(selected as any)?.id ?? "user"}.png`;
-        const filepath = `${FileSystem.cacheDirectory}${filename}`;
-
-        await FileSystem.writeAsStringAsync(filepath, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        if (Platform.OS === "web") {
-          Alert.alert("Saved", "QR image created (web). Please download using your browser.");
-        } else {
-          await Sharing.shareAsync(filepath);
-        }
-      } catch (err) {
-        console.error("shareQr error", err);
-        Alert.alert("Share error", "Unable to share QR image.");
-      }
-    });
+  if (!svgRef.current) {
+    Alert.alert("No QR", "Nothing to share.");
+    return;
   }
+
+  try {
+    const uri = await captureRef(svgRef, {
+      format: "png",
+      quality: 1,
+    });
+
+    await Sharing.shareAsync(uri);
+  } catch (err) {
+    console.error("shareQr error", err);
+    Alert.alert("Share error", "Unable to share QR image.");
+  }
+}
 
   function renderStudent({ item }: { item: Student }) {
     return (
@@ -194,21 +189,21 @@ const router = useRouter();
         onPress={() => openQrForStudent(item)}
         className="bg-white rounded-xl p-4 mb-3 flex-row justify-between items-center"
       >
-        <View>
-          <Text className="font-semibold text-dark">{item.name}</Text>
-          <Text className="text-xs text-neutral mt-1">{item.rollNo ? `Roll: ${item.rollNo}` : (item as any).shortId}</Text>
-          <Text className="text-xs text-neutral mt-1">Class: {item.classId ?? "-"}</Text>
-        </View>
+       <View>
+  <Text className="font-semibold text-dark">{getStudentLabel(item)}</Text>
+  <Text className="text-xs text-neutral mt-1">Class: {item.classId ?? "-"}</Text>
+</View>
+
 
         <Pressable
           onPress={() => openQrForStudent(item)}
-          className="bg-primary px-3 py-2 rounded"
+          className="bg-primary px-3 py-2 rounded-xl"
         >
           <Text className="text-white font-semibold">Generate QR</Text>
         </Pressable>
       </Pressable>
     );
-  }
+  } 
 
   /* ---------- EXPORT (OFFLINE PNG -> PDF) ---------- */
   async function exportClassQrs(classId: string | null) {
@@ -259,7 +254,7 @@ const router = useRouter();
 
         // For printable QR we use a simple scanner-friendly payload:
         // { studentId: "<docId>", classId: "<shortClassId>" }
-        const printablePayload = JSON.stringify({ studentId: s.id, classId: s.classId ?? "" });
+       const printablePayload = JSON.stringify({ studentId: s.studentId ?? s.id, classId: s.classId ?? "" });
 
         // find the ref
         const ref = qrRefs.current.get(s.id);
@@ -280,8 +275,13 @@ const router = useRouter();
         // If the hidden QR ref was using a different payload, ensure we generated the ref with the printable payload
         // (HiddenQRs below will render the printable payload.)
 
-        images.push({ name: s.name ?? "", roll: s.rollNo ?? (s as any).shortId ?? "", base64 });
+ images.push({
+  name: getStudentLabel(s),
+  roll: "", // nothing else printed
+  base64
+});
 
+ 
         setExportProgress({ done: i + 1, total: studentsForClass.length });
         await wait(50);
       }
@@ -300,9 +300,14 @@ const router = useRouter();
           <td style="vertical-align:top;padding:10px;width:${100 / colsPerRow}%">
             <div style="border:1px solid #e6e6e6;padding:8px;border-radius:8px;text-align:center;">
               ${imgHtml}
-              <div style="font-size:14px;font-weight:600;color:#111;">${escapeHtml(it.name)}</div>
-              <div style="font-size:12px;color:#444;margin-top:4px;">${escapeHtml(it.roll)}</div>
-            </div>
+             <div style="font-size:14px;font-weight:600;color:#111;">
+  ${escapeHtml(it.name || "-")}
+</div>
+<div style="font-size:12px;color:#444;margin-top:4px;">
+  ${escapeHtml(it.roll || "-")}
+</div>
+
+</div>
           </td>
         `;
         cellBuffer.push(cell);
@@ -369,8 +374,8 @@ const router = useRouter();
       <View style={{ position: "absolute", left: -10000, top: -10000, width: 1, height: 1, opacity: 0 }}>
         {hiddenQrStudents.map((s) => {
           // printable payload for offline QR: { studentId, classId }
-          const printablePayload = JSON.stringify({ studentId: s.id, classId: s.classId ?? "" });
-          return (
+          const printablePayload = JSON.stringify({ studentId: s.studentId ?? s.id, classId: s.classId ?? "" });
+return (
             <View key={s.id} style={{ width: 300, height: 300 }}>
               <QRCode
                 value={printablePayload}
@@ -418,7 +423,7 @@ const router = useRouter();
 
   <Pressable
     onPress={() => setExportModalVisible(true)}
-    className="bg-primary px-3 py-2 rounded mt-2"
+    className="bg-primary px-3 py-2 rounded-xl mt-2"
     disabled={exporting || classIds.length === 0}
   >
     <Text className="text-white font-semibold text-sm">
@@ -433,7 +438,7 @@ const router = useRouter();
   value={query}
   onChangeText={setQuery}
   placeholder="Search by name, roll or id"
-  className="border rounded px-3 py-2 bg-white mb-4"
+  className="border rounded-xl px-3 py-2 bg-white mb-4"
   autoCorrect={false}
 />
 
@@ -453,26 +458,35 @@ const router = useRouter();
         <View className="flex-1 items-center justify-center bg-black/60 p-6">
           <View className="bg-white w-full max-w-md rounded-xl p-6">
 
-            <Text className="text-lg font-semibold text-dark mb-2">{selected?.name}</Text>
-            <Text className="text-sm text-neutral mb-4">{selected?.rollNo ? `Roll: ${selected.rollNo}` : (selected as any)?.shortId}</Text>
+            <Text className="text-lg font-semibold text-dark mb-2">
+  {getStudentLabel(selected ?? {})}
+</Text>
+  
+    <View className="items-center mb-6">
+  {payloadJson ? (
+    <View
+      ref={svgRef}
+      className="p-4 bg-white rounded-2xl border border-gray-300 shadow-lg items-center"
+    >
+      <Text className="text-sm font-semibold text-dark mb-2">
+        {getStudentLabel(selected ?? {})}
+      </Text>
 
-            <View className="items-center mb-6">
-              {payloadJson ? (
-                <View className="p-4 bg-white rounded-2xl border border-gray-300 shadow-lg">
-                  <QRCode
-                    value={payloadJson}
-                    size={260}
-                    color="#000"
-                    backgroundColor="#ffffff"
-                    ecl="H"
-                    quietZone={20 as any}
-                    getRef={(c) => (svgRef.current = c)}
-                  />
-                </View>
-              ) : (
-                <ActivityIndicator />
-              )}
-            </View>
+      <QRCode
+        value={payloadJson}
+        size={260}
+        color="#000"
+        backgroundColor="#ffffff"
+        ecl="H"
+        quietZone={20 as any}
+      />
+    </View>
+  ) : (
+    <ActivityIndicator />
+  )}
+</View>
+
+
 
             <View className="mb-3">
               <Text className="text-xs text-neutral">Payload (JSON)</Text>
@@ -480,7 +494,7 @@ const router = useRouter();
             </View>
 
             <View className="flex-row justify-between space-x-3">
-              <Pressable onPress={copyPayload} className="flex-1 bg-primary py-3 rounded">
+              <Pressable onPress={copyPayload} className="flex-1 bg-primary py-3 rounded-xl">
                 <Text className="text-white text-center font-semibold">Copy JSON</Text>
               </Pressable>
               <Pressable onPress={shareQrAsPng} className="flex-1 border py-3 rounded">
@@ -490,7 +504,7 @@ const router = useRouter();
 
             <Pressable
               onPress={() => { setModalVisible(false); setSelected(null); setPayloadJson(null); }}
-              className="py-3 rounded mt-3"
+              className="py-3 rounded-xl mt-3"
             >
               <Text className="text-center text-neutral">Close</Text>
             </Pressable>
@@ -513,7 +527,7 @@ const router = useRouter();
                   <Pressable
                     key={cid}
                     onPress={() => setSelectedClassForExport(cid)}
-                    className={`px-3 py-2 rounded mb-2 ${selectedClassForExport === cid ? "bg-primary" : "bg-white"}`}
+                    className={`px-3 py-2 rounded-xl mb-2 ${selectedClassForExport === cid ? "bg-primary" : "bg-white"}`}
                     style={selectedClassForExport === cid ? undefined : { borderWidth: 1, borderColor: "#E5E7EB" }}
                   >
                     <Text className={selectedClassForExport === cid ? "text-white" : "text-dark"}>{cid}</Text>
@@ -535,7 +549,7 @@ const router = useRouter();
             <View className="flex-row space-x-3">
               <Pressable
                 onPress={() => exportClassQrs(selectedClassForExport)}
-                className="flex-1 bg-primary py-3 rounded"
+                className="flex-1 bg-primary py-3 rounded-xl"
                 disabled={exporting || !selectedClassForExport}
               >
                 <Text className="text-white text-center font-semibold">{exporting ? "Exporting..." : "Export PDF"}</Text>
@@ -543,7 +557,7 @@ const router = useRouter();
 
               <Pressable
                 onPress={() => setExportModalVisible(false)}
-                className="flex-1 border py-3 rounded"
+                className="flex-1 border py-3 rounded-xl"
               >
                 <Text className="text-center font-semibold">Cancel</Text>
               </Pressable>

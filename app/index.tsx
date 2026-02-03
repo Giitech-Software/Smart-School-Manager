@@ -131,26 +131,41 @@ export default function Home(): JSX.Element {
   </View>
 
   {/* Action row */}
-  <View className="mt-4 flex-row items-center justify-between">
-    <View className="flex-row items-center space-x-3">
-      <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
-        <MaterialIcons name="qr-code-scanner" size={16} color="#FFFFFF" />
-        <Text className="text-white ml-2 text-m">QR</Text>
-      </View>
+  {/* Action row */}
+<View className="mt-4 flex-row items-center justify-between">
+  <View className="flex-row items-center space-x-3">
 
-      <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
-        <Entypo name="fingerprint" size={16} color="#FFFFFF" />
-        <Text className="text-white ml-2 text-m">Biometric</Text>
-      </View>
+    {/* QR */}
+    <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
+      <MaterialIcons name="qr-code-scanner" size={16} color="#FFFFFF" />
+      <Text className="text-white ml-2 text-m">QR</Text>
     </View>
 
-    <Pressable
-      onPress={() => router.push("/attendance/checkin")}
-      className="bg-yellow-400 px-4 py-2 rounded-full"
-    >
-      <Text className="text-blue-900 font-bold">Start</Text>
-    </Pressable>
+    {/* Biometric */}
+    <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
+      <Entypo name="fingerprint" size={16} color="#FFFFFF" />
+      <Text className="text-white ml-2 text-m">Biometric</Text>
+    </View>
+
+    {/* ✅ Facial */}
+    <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
+      <MaterialIcons
+        name="face-retouching-natural"
+        size={16}
+        color="#FFFFFF"
+      />
+      <Text className="text-white ml-2 text-m">Facial</Text>
+    </View>
+
   </View>
+
+  <Pressable
+    onPress={() => router.push("/attendance/checkin")}
+    className="bg-yellow-400 px-4 py-2 rounded-full"
+  >
+    <Text className="text-blue-900 font-bold">Start</Text>
+  </Pressable>
+</View>
 </View>
 {/* Hero Image */}
 <View className="bg-white">

@@ -35,29 +35,34 @@ export async function exportStudentAttendancePdf(
   ---------------------------------------------- */
   const snap = await getDoc(doc(db, "students", studentId));
 
-  let studentName = "Student";
-  let classLabel = "—";
+ let studentName = "Student";
+let classLabel = "—";
 
-  if (snap.exists()) {
-    const data = snap.data();
-    studentName =
-      data.name ??
-      data.displayName ??
-      data.rollNo ??
-      "Student";
+if (snap.exists()) {
+  const data = snap.data();
 
-    try {
-      const classes = await listClasses();
-      const match = classes.find(
-        (c) =>
-          c.id === data.classDocId ||
-          c.classId === data.classId
-      );
-      if (match) classLabel = match.name;
-    } catch (e) {
-      console.warn("Failed to resolve class name", e);
-    }
+  // ✅ STUDENT DISPLAY RULE (GLOBAL RULE)
+  const name = data.name ?? "Student";
+const studentCode = data.studentId ?? data.rollNo;
+
+studentName = studentCode
+  ? `${name} (${studentCode})`
+  : name;
+
+  // ✅ CLASS RESOLUTION (UNCHANGED)
+  try {
+    const classes = await listClasses();
+    const match = classes.find(
+      (c) =>
+        c.id === data.classDocId ||
+        c.classId === data.classId
+    );
+    if (match) classLabel = match.name;
+  } catch (e) {
+    console.warn("Failed to resolve class name", e);
   }
+}
+
 
   /* ---------------------------------------------
      Load data

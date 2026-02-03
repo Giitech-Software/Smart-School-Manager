@@ -146,11 +146,11 @@ try {
   value={fullName}
   onChangeText={setFullName}
   placeholder="Your full name"
-  className="border p-3 rounded mb-3 bg-white"
+  className="border p-3 rounded-xl mb-3 bg-white"
 />
 
 {/* Role selection */}<Text className="text-m text-slate-600 mb-1">Register as</Text>
-<View className="border rounded mb-3 overflow-hidden">
+<View className="border rounded-xl mb-3 overflow-hidden">
 <AppPicker
   selectedValue={role}
   onValueChange={(value) => setRole(value)}
@@ -172,7 +172,7 @@ try {
   onChangeText={setEmail}
   placeholder="you@example.com"
   keyboardType="email-address"
-  className="border p-3 rounded mb-3 bg-white"
+  className="border p-3 rounded-xl mb-3 bg-white"
 />
 
 
@@ -183,7 +183,7 @@ try {
   onChangeText={setPassword}
   placeholder="Create a password"
   secureTextEntry={!showPassword}
-  className="border p-3 rounded mb-2 bg-white"
+  className="border p-3 rounded-xl mb-2 bg-white"
 />
 
           {/* Confirm Password */}
@@ -195,7 +195,7 @@ try {
   onChangeText={setConfirm}
   placeholder="Confirm password"
   secureTextEntry={!showPassword}
-  className="border p-3 rounded mb-1 bg-white"
+  className="border p-3 rounded-xl mb-1 bg-white"
   onSubmitEditing={handleSignup}
 />
 
@@ -210,7 +210,7 @@ try {
           {/* Signup button */}
           <Pressable
             onPress={handleSignup}
-            className="bg-primary py-3 rounded mb-3"
+            className="bg-primary py-3 rounded-xl mb-3"
             disabled={loading}
           >
             <Text className="text-white text-center text-xl">

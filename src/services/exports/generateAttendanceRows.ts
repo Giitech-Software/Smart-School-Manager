@@ -26,8 +26,20 @@ export function generateAttendanceRows(
       return `
         <tr>
           <td>${idx + 1}</td>
-          <td class="${rowClass}" style="text-align:left">
-            ${s.studentName ?? s.studentId}
+        
+           <td class="${rowClass}" style="text-align:left">
+  <div style="font-weight:600">
+    ${s.studentName}
+  </div>
+ <div style="font-size:11px;color:#555">
+  (${s.displayId || s.rollNumber || ""})
+</div>
+
+</td>
+
+</td>
+
+
           </td>
         <td class="present">${s.presentCount}</td>
 <td class="late">${s.lateCount}</td>

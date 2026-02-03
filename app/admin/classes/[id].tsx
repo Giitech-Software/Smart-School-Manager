@@ -109,10 +109,12 @@ export default function AdminClassDetail() {
   async function forceAssign(student: Student, unassign = false) {
     try {
       await upsertStudent({
-        id: student.id,
-        classDocId: unassign ? undefined : id,
-        classId: unassign ? undefined : cls.classId,
-      });
+  id: student.id,
+  classDocId: unassign ? undefined : id,
+  classId: unassign ? undefined : cls.classId,
+  isActive: unassign ? false : true,
+});
+
 
       setStudents((prev) =>
         prev.map((st) =>
@@ -134,15 +136,19 @@ export default function AdminClassDetail() {
   /* -------------------------------------------------- */
   /* FILTER                                             */
   /* -------------------------------------------------- */
-  const filteredStudents = students.filter((s) => {
-    const q = search.trim().toLowerCase();
-    if (!q) return true;
+ const filteredStudents = students.filter((s) => {
+  if (s.isActive === false) return false;
 
-    return (
-      s.name?.toLowerCase().includes(q) ||
-      s.rollNo?.toLowerCase().includes(q)
-    );
-  });
+  const q = search.trim().toLowerCase();
+  if (!q) return true;
+
+  return (
+    s.name?.toLowerCase().includes(q) ||
+    s.studentId?.toLowerCase().includes(q) ||
+    (!s.studentId && s.rollNo?.toLowerCase().includes(q))
+  );
+});
+
 function getClassName(classDocId?: string) {
   if (!classDocId) return "another class";
   return classMap[classDocId] ?? "another class";
@@ -200,12 +206,15 @@ function getClassName(classDocId?: string) {
             <View className="bg-white rounded-2xl p-4 mb-3">
               <View className="flex-row items-center justify-between">
                 <View>
-                  <Text className="font-semibold text-dark">
-                    {item.name ?? item.id}
-                  </Text>
-                  <Text className="text-sm text-neutral mt-1">
-                    {item.rollNo ?? "—"}
-                  </Text>
+                <Text className="font-semibold text-dark">
+  {item.name}
+  {item.studentId
+    ? ` (${item.studentId})`
+    : item.rollNo
+    ? ` (${item.rollNo})`
+    : ""}
+</Text>
+
 
                  {assignedElsewhere && (
   <Text className="text-xs text-amber-600 mt-1">
