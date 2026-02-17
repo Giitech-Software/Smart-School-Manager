@@ -16,9 +16,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { registerAttendanceUnified } from "../../src/services/attendance";
 import { getClassById } from "../../src/services/classes";
 import { listStudents, getStudentById } from "../../src/services/students";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+
 import { db } from "../../app/firebase";
 import { validateQrPayload } from "../../src/services/qr";
+import { registerStaffAttendance } from "../../src/services/staffAttendance";
 
 /** Helper: returns YYYY-MM-DD */
 function todayISO() {
@@ -28,26 +30,42 @@ function todayISO() {
 /** Parse JSON or string QR; returns studentId + classId if present */
 function parseQRCodePayload(payload: string): {
   studentId?: string;
+  staffId?: string;
   classId?: string;
 } {
   try {
     const maybeJson = JSON.parse(payload);
+
     if (typeof maybeJson === "object" && maybeJson !== null) {
-      // Accept both signed style (userId + role + sig) and printable style (studentId)
-      const studentId = typeof maybeJson.studentId === "string"
-        ? maybeJson.studentId
-        : typeof maybeJson.userId === "string"
-        ? maybeJson.userId
-        : undefined;
-      const classId = typeof maybeJson.classId === "string" ? maybeJson.classId : undefined;
-      return { studentId, classId };
+
+      const staffId =
+        typeof maybeJson.staffId === "string"
+          ? maybeJson.staffId
+          : undefined;
+
+      const studentId =
+        typeof maybeJson.studentId === "string"
+          ? maybeJson.studentId
+          : typeof maybeJson.userId === "string"
+          ? maybeJson.userId
+          : undefined;
+
+      const classId =
+        typeof maybeJson.classId === "string"
+          ? maybeJson.classId
+          : undefined;
+
+      return { studentId, staffId, classId };
     }
   } catch {}
+
   if (typeof payload === "string" && payload.trim().length > 0) {
     return { studentId: payload.trim() };
   }
+
   return {};
 }
+
 
 export default function QRScanner(): JSX.Element {
   const router = useRouter();
@@ -178,137 +196,214 @@ export default function QRScanner(): JSX.Element {
         typeof parsedJson.ts !== "undefined" &&
         typeof parsedJson.sig === "string";
 
-      let scannedStudentId: string | null = null; // canonical student doc id (or value to lookup)
-      let classIdFromQR: string | null = null;
+     let scannedId: string | null = null;
+let classIdFromQR: string | null = null;
 
-      if (isSignedPayload) {
-        // validate signature (if validateQrPayload expects that signed shape)
-        try {
-          const valid = await validateQrPayload(parsedJson as any);
-          if (!valid) {
-            Alert.alert("Invalid QR", "Signature validation failed.");
-            setScanned(false);
-            setScannedPayload(null);
-            return;
-          }
-        } catch (err: any) {
-          console.error("validateQrPayload error:", err);
-          Alert.alert("Invalid QR", "Signature validation error.");
-          setScanned(false);
-          setScannedPayload(null);
-          return;
-        }
+const isStaffActor = params?.actor === "staff";
 
-        // for signed payloads we interpret the userId as the student doc id
-        scannedStudentId = String(parsedJson.userId);
-        classIdFromQR = parsedJson.classId ?? null;
-      } else {
-        // handle printable payloads or plain strings
-        const fallback = parseQRCodePayload(data);
-        scannedStudentId = fallback.studentId ?? null;
-        classIdFromQR = fallback.classId ?? null;
-      }
-
-      if (!scannedStudentId) {
-        Alert.alert("Invalid QR", "This QR code does not contain a student ID.");
-        setScanned(false);
-        setScannedPayload(null);
-        return;
-      }
-
-      // Determine class id to use: prefer URL param, then QR payload
-      const finalClassId = selectedClassIdFromParam ?? classIdFromQR ?? null;
-      if (!finalClassId) {
-        Alert.alert(
-          "Class not specified",
-          "No class selected. Provide a class in the QR payload or open this scanner from the Check-In screen with a selected class."
-        );
-        setScanned(false);
-        setScannedPayload(null);
-        return;
-      }
-
-      setProcessing(true);
-      try {
-        // Resolve scannedStudentId (studentId field) → Firestore document
-let studentDoc: any = null;
-
-// 1️⃣ Try lookup by studentId field (PRIMARY)
-try {
-  const q1 = query(
-    collection(db, "students"),
-    where("studentId", "==", scannedStudentId)
-  );
-  const snap1 = await getDocs(q1);
-  if (snap1.docs.length > 0) {
-    const d = snap1.docs[0];
-    studentDoc = { id: d.id, ...(d.data() as any) };
-  }
-} catch {}
-
-// 2️⃣ Fallback: rollNo (LAST RESORT)
-if (!studentDoc) {
+if (isSignedPayload) {
   try {
-    const q2 = query(
-      collection(db, "students"),
-      where("rollNo", "==", scannedStudentId)
-    );
-    const snap2 = await getDocs(q2);
-    if (snap2.docs.length > 0) {
-      const d = snap2.docs[0];
-      studentDoc = { id: d.id, ...(d.data() as any) };
+    const valid = await validateQrPayload(parsedJson as any);
+    if (!valid) {
+      Alert.alert("Invalid QR", "Signature validation failed.");
+      setScanned(false);
+      setScannedPayload(null);
+      return;
     }
-  } catch {}
+  } catch (err) {
+    Alert.alert("Invalid QR", "Signature validation error.");
+    setScanned(false);
+    setScannedPayload(null);
+    return;
+  }
+
+  scannedId = String(parsedJson.userId);
+  classIdFromQR = parsedJson.classId ?? null;
+
+} else {
+  const fallback = parseQRCodePayload(data);
+
+  scannedId = isStaffActor
+    ? (fallback.staffId ?? fallback.studentId ?? null)
+    : (fallback.studentId ?? null);
+
+  classIdFromQR = fallback.classId ?? null;
 }
 
-// 3️⃣ Final safety
-if (!studentDoc) {
+
+// ✅ Role-aware safety check
+if (!scannedId) {
   Alert.alert(
-    "Unknown student",
-    "Scanned ID does not match any student record."
+    "Invalid QR",
+    isStaffActor
+      ? "This QR code does not contain a Staff ID."
+      : "This QR code does not contain a Student ID."
   );
-  setProcessing(false);
   setScanned(false);
   setScannedPayload(null);
   return;
 }
 
-        // Register attendance using unified function (guards duplicates)
-        try { 
-          await registerAttendanceUnified({
-            studentId: String(studentDoc.id),
-            classId: finalClassId,
-            mode,
-            biometric: false,
-          });  
 
-          try {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          } catch {}
+     // Determine class id to use: prefer URL param, then QR payload
+const finalClassId = selectedClassIdFromParam ?? classIdFromQR ?? null;
 
-          Alert.alert(
-            "Success",
-            `${studentDoc.name ?? studentDoc.displayName ?? String(studentDoc.id)} successfully ${mode === "in" ? "checked in" : "checked out"}.`
-          );
+// ✅ Only enforce class for STUDENTS
+if (!finalClassId && params?.actor !== "staff") {
+  Alert.alert(
+    "Class not specified",
+    "No class selected. Provide a class in the QR payload or select one first."
+  );
+  setScanned(false);
+  setScannedPayload(null);
+  return;
+}
 
-          // keep scanned=true so camera ignores further scans until user taps "Scan Again"
-        } catch (regErr: any) {
-          const message = regErr?.message ?? "Failed to record attendance.";
-          try {
-            await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-          } catch {}
-          Alert.alert("Attendance", message);
-          setScanned(false);
-          setScannedPayload(null);
-        }
-      } catch (err: any) {
-        console.error("Attendance error:", err);
-        Alert.alert("Error", err?.message ?? "Failed to record attendance.");
-        setScanned(false);
-        setScannedPayload(null);
-      } finally {
-        setProcessing(false);
+
+      setProcessing(true);
+try {
+  const currentActor = params?.actor ?? "student";
+
+  if (currentActor === "staff") {
+    // ============================
+    // 👨‍🏫 STAFF FLOW
+    // ============================
+
+    // 1️⃣ Safety check for signed QR role
+    if (isSignedPayload && parsedJson.role !== "staff") {
+      Alert.alert("Invalid QR", "This QR code is not for a staff member.");
+      setProcessing(false);
+      setScanned(false);
+      return;
+    }
+
+    // 2️⃣ Lookup staff by staffId field
+   // 2️⃣ Lookup staff safely
+let staffDoc: any = null;
+
+// Try matching by custom staffId field
+const qStaff = query(
+  collection(db, "staff"),
+where("staffId", "==", scannedId)
+
+);
+
+const snapStaff = await getDocs(qStaff);
+
+if (!snapStaff.empty) {
+  const d = snapStaff.docs[0];
+  staffDoc = { id: d.id, ...(d.data() as any) };
+} else {
+  // Fallback: try matching by Firebase document ID
+  try {
+ const staffDocRef = doc(db, "staff", scannedId);
+
+    const staffSnap = await getDoc(staffDocRef);
+
+    if (staffSnap.exists()) {
+      staffDoc = { id: staffSnap.id, ...staffSnap.data() };
+    }
+  } catch {}
+}
+
+if (!staffDoc) {
+  Alert.alert("Unknown Staff", "No staff record matches this ID.");
+  setProcessing(false);
+  setScanned(false);
+  return;
+}
+
+
+    // 3️⃣ Register staff attendance
+    await registerStaffAttendance({
+      staffId: staffDoc.id,
+      mode: mode,
+      method: "qr",
+      biometric: false,
+    });
+
+    Alert.alert(
+      "Success",
+      `Staff: ${staffDoc.name} ${mode === "in" ? "checked in" : "checked out"}.`
+    );
+  } else {
+    // ============================
+    // 👨‍🎓 STUDENT FLOW (Existing)
+    // ============================
+
+    let studentDoc: any = null;
+
+    // 1️⃣ Try studentId
+    const q1 = query(
+      collection(db, "students"),
+     where("studentId", "==", scannedId)
+
+    );
+    const snap1 = await getDocs(q1);
+
+    if (snap1.docs.length > 0) {
+      const d = snap1.docs[0];
+      studentDoc = { id: d.id, ...(d.data() as any) };
+    }
+
+    // 2️⃣ Fallback rollNo
+    if (!studentDoc) {
+      const q2 = query(
+        collection(db, "students"),
+      where("rollNo", "==", scannedId)
+
+      );
+      const snap2 = await getDocs(q2);
+
+      if (snap2.docs.length > 0) {
+        const d = snap2.docs[0];
+        studentDoc = { id: d.id, ...(d.data() as any) };
       }
+    }
+
+    // 3️⃣ Safety
+    if (!studentDoc) {
+      Alert.alert(
+        "Unknown Student",
+        "Scanned ID does not match any student record."
+      );
+      setProcessing(false);
+      setScanned(false);
+      return;
+    }
+
+    // Inside the STUDENT FLOW (Existing)
+await registerAttendanceUnified({
+  studentId: String(studentDoc.id),
+  // Add the '!' to tell TypeScript: "I've checked, this is definitely not null"
+  classId: finalClassId!, 
+  mode,
+  biometric: false,
+});
+
+    Alert.alert(
+      "Success",
+      `${studentDoc.name ?? "Student"} successfully ${
+        mode === "in" ? "checked in" : "checked out"
+      }.`
+    );
+  }
+
+  try {
+    await Haptics.notificationAsync(
+      Haptics.NotificationFeedbackType.Success
+    );
+  } catch {}
+} catch (err: any) {
+  Alert.alert(
+    "Attendance Error",
+    err?.message ?? "Failed to record attendance."
+  );
+  setScanned(false);
+} finally {
+  setProcessing(false);
+}
+
     },
     [scanned, processing, mode, selectedClassIdFromParam]
   );
@@ -376,13 +471,15 @@ if (!studentDoc) {
         <View className="absolute inset-0">
 
           {/* TOP HEADER */}
-          <View className="px-6 pt-10">
-            <Text className="text-white text-xl font-bold text-center">
-              Scan Student QR
-            </Text>
-            <Text className="text-white/70 text-sm text-center mt-1">
-              Point your camera at the student's QR code
-            </Text>
+         {/* TOP HEADER */}
+<View className="px-6 pt-10">
+  <Text className="text-white text-xl font-bold text-center">
+    {params?.actor === "staff" ? "Scan Staff QR" : "Scan Student QR"}
+  </Text>
+  <Text className="text-white/70 text-sm text-center mt-1">
+    Point your camera at the {params?.actor === "staff" ? "staff member's" : "student's"} QR code
+  </Text>
+
 
             {/* show selected class if provided */}
             {displayClassInfo ? (
@@ -443,7 +540,8 @@ if (!studentDoc) {
                     position: "absolute",
                     width: 32,
                     height: 32,
-                    borderColor: "white",
+                   borderColor: params?.actor === "staff" ? "#6366f1" : "white",
+
                     ...(c === "tl" && { left: -2, top: -2, borderLeftWidth: 3, borderTopWidth: 3 }),
                     ...(c === "tr" && { right: -2, top: -2, borderRightWidth: 3, borderTopWidth: 3 }),
                     ...(c === "bl" && { left: -2, bottom: -2, borderLeftWidth: 3, borderBottomWidth: 3 }),
@@ -494,14 +592,21 @@ if (!studentDoc) {
                     </Text>
                   </Pressable>
 
-                  <Pressable
-                    onPress={() => router.replace("/attendance/checkin")}
-                    className="flex-1 border border-white/20 py-3 rounded-xl"
-                  >
-                    <Text className="text-white font-semibold text-center">
-                      Done
-                    </Text>
-                  </Pressable>
+          <Pressable
+  onPress={() => {
+    router.replace({
+      pathname: "/attendance/checkin",
+      params: { actor: params?.actor ?? "student" },
+    });
+  }}
+  className="flex-1 border border-white/20 py-3 rounded-xl"
+>
+  <Text className="text-white font-semibold text-center">
+    Done
+  </Text>
+</Pressable>
+
+
                 </View>
               </View>
             ) : (

@@ -1,3 +1,4 @@
+//app/attendance/checkin.tsx
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -15,7 +16,7 @@ import type { Student as StudentRecord } from "../../src/services/types";
 import { registerAttendanceUnified } from "../../src/services/attendance";
 import { getStudentById } from "../../src/services/students";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { collection, query, where, onSnapshot } from "firebase/firestore";
+import { collection, query, where, onSnapshot, orderBy } from "firebase/firestore";
 import { db } from "../../app/firebase";
 import { handleStaffBiometricCheck, StaffBiometricMethod } from "../../src/services/staffBiometricHandler";
 
@@ -49,17 +50,58 @@ function StudentRow({ student, onCheckIn, onCheckOut }: { student: StudentRecord
         {`${student.name} ${idText ? `(${idText})` : ""}${enrollStatus}`}
       </Text>
       <View className="flex-row">
-        <Pressable onPress={onCheckIn} className="bg-blue-600 px-4 py-2 rounded-lg mr-3">
-          <Text className="text-white font-semibold">Check-In</Text>
-        </Pressable>
-        <Pressable onPress={onCheckOut} className="bg-yellow-600 px-4 py-2 rounded-lg mr-3">
-          <Text className="text-white font-semibold">Check-Out</Text>
-        </Pressable>
-      </View>
+  <Pressable
+    onPress={onCheckIn}
+    disabled={!hasBiometric}
+    className={`${hasBiometric ? "bg-blue-600" : "bg-gray-400"} px-4 py-2 rounded-lg mr-3`}
+  >
+    <Text className="text-white font-semibold">Check-In</Text>
+  </Pressable>
+
+  <Pressable
+    onPress={onCheckOut}
+    disabled={!hasBiometric}
+    className={`${hasBiometric ? "bg-yellow-600" : "bg-gray-400"} px-4 py-2 rounded-lg mr-3`}
+  >
+    <Text className="text-white font-semibold">Check-Out</Text>
+  </Pressable>
+</View>
+
     </View>
   );
 }
 
+
+/* ------------------------- Staff Row ------------------------- */
+function StaffRow({ staff, onCheckIn, onCheckOut }: { staff: any; onCheckIn: () => void; onCheckOut: () => void; }) {
+  const hasBiometric = !!staff.fingerprintId;
+
+  return (
+    <View className={`px-4 py-3 rounded-xl mb-3 ${hasBiometric ? "bg-blue-50" : "bg-gray-100"}`}>
+      <Text className={`${hasBiometric ? "text-blue-800" : "text-gray-700"} mb-2 font-medium`}>
+        {`${staff.name} (${staff.staffId ?? 'No ID'})${hasBiometric ? " (Enrolled)" : " (No biometric)"}`}
+      </Text>
+      <View className="flex-row">
+  <Pressable
+    onPress={onCheckIn}
+    disabled={!hasBiometric}
+    className={`${hasBiometric ? "bg-blue-600" : "bg-gray-400"} px-4 py-2 rounded-lg mr-3 shadow-sm`}
+  >
+    <Text className="text-white font-semibold">Check-In</Text>
+  </Pressable>
+
+  <Pressable
+    onPress={onCheckOut}
+    disabled={!hasBiometric}
+    className={`${hasBiometric ? "bg-yellow-600" : "bg-gray-400"} px-4 py-2 rounded-lg shadow-sm`}
+  >
+    <Text className="text-white font-semibold">Check-Out</Text>
+  </Pressable>
+</View>
+
+    </View>
+  );
+}
 /* ------------------------- Main Screen ------------------------- */
 export default function CheckinScreen() {
   const router = useRouter();
@@ -68,6 +110,8 @@ export default function CheckinScreen() {
   const [loading, setLoading] = useState(false);
   const [classes, setClasses] = useState<ClassRecord[]>([]);
   const [students, setStudents] = useState<StudentRecord[]>([]);
+  // ADD THIS:
+  const [staffMembers, setStaffMembers] = useState<any[]>([]);
   const [classesLoading, setClassesLoading] = useState(true);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [showBiometric, setShowBiometric] = useState(false);
@@ -88,6 +132,19 @@ export default function CheckinScreen() {
     return () => unsubscribe();
   }, [selectedClassId, actor]);
 
+// ADD THIS useEffect block:
+  useEffect(() => {
+    if (actor !== "staff") return;
+
+    const q = query(collection(db, "staff"), orderBy("name", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setStaffMembers(snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })));
+    }, (err) => {
+      console.error("Staff fetch error:", err);
+    });
+    return () => unsubscribe();
+  }, [actor]);
+
   async function loadClasses() {
     setClassesLoading(true);
     try {
@@ -102,48 +159,106 @@ export default function CheckinScreen() {
   }
 
   async function tryFingerprint(actorId: string, checkType: "in" | "out") {
-    const attendanceCheck = isAttendanceAllowed();
-    if (!attendanceCheck.allowed) {
-      Alert.alert("Attendance not allowed", attendanceCheck.reason);
-      return;
-    }
-    if (!selectedClassId && actor === "student") {
-      Alert.alert("Select class", "Please select a class before recording attendance.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const hasHardware = await LocalAuthentication.hasHardwareAsync();
-      const enrolledOnDevice = await LocalAuthentication.isEnrolledAsync();
-      if (!hasHardware || !enrolledOnDevice) {
-        Alert.alert("Biometric unavailable", "No biometrics enrolled on this device.");
-        return;
-      }
-
-      const res = await LocalAuthentication.authenticateAsync({ promptMessage: `Authenticate to check-${checkType}` });
-      if (!res.success) {
-        Alert.alert("Authentication failed");
-        return;
-      }
-
-      if (actor === "student") {
-        const student = await getStudentById(actorId);
-        if (!student || !student.fingerprintId) {
-          Alert.alert("Error", "Student not biometrically enrolled.");
-          return;
-        }
-        await registerAttendanceUnified({ studentId: actorId, classId: selectedClassId!, mode: checkType, biometric: true });
-        setConfirmation({ name: student.name ?? "Student", mode: checkType, time: new Date().toLocaleTimeString() });
-      } else {
-        await handleStaffBiometricCheck({ staffId: actorId, mode: checkType, biometricVerified: true, method: "fingerprint" });
-        setConfirmation({ name: "Staff Member", mode: checkType, time: new Date().toLocaleTimeString() });
-      }
-      setTimeout(() => setConfirmation(null), 3000);
-    } catch (err: any) {
-      Alert.alert("Error", err?.message ?? String(err));
-    } finally { setLoading(false); }
+  const attendanceCheck = isAttendanceAllowed();
+  if (!attendanceCheck.allowed) {
+    Alert.alert("Attendance not allowed", attendanceCheck.reason);
+    return;
   }
+
+  if (!selectedClassId && actor === "student") {
+    Alert.alert("Select class", "Please select a class before recording attendance.");
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // 1️⃣ Biometric Hardware Check
+    const hasHardware = await LocalAuthentication.hasHardwareAsync();
+    const enrolledOnDevice = await LocalAuthentication.isEnrolledAsync();
+
+    if (!hasHardware || !enrolledOnDevice) {
+      Alert.alert("Biometric unavailable", "No biometrics enrolled on this device.");
+      return;
+    }
+
+    // ===============================
+    // 👨‍🎓 STUDENT LOGIC
+    // ===============================
+    if (actor === "student") {
+      const student = await getStudentById(actorId);
+
+      // ✅ NEW: Enrollment Verification
+      if (!student || !student.fingerprintId) {
+        Alert.alert("Denied", "This student is not biometrically enrolled.");
+        return;
+      }
+
+      // Authenticate AFTER verification
+      const res = await LocalAuthentication.authenticateAsync({
+        promptMessage: `Authenticate Student`,
+      });
+
+      if (!res.success) return;
+
+      await registerAttendanceUnified({
+        studentId: actorId,
+        classId: selectedClassId!,
+        mode: checkType,
+        biometric: true,
+      });
+
+      setConfirmation({
+        name: student.name ?? "Student",
+        mode: checkType,
+        time: new Date().toLocaleTimeString(),
+      });
+    }
+
+    // ===============================
+    // 👨‍🏫 STAFF LOGIC (UPDATED)
+    // ===============================
+    else {
+      // Find staff locally
+      const staff = staffMembers.find((s) => s.id === actorId);
+
+      // ✅ NEW: Enrollment Verification
+      if (!staff || !staff.fingerprintId) {
+        Alert.alert(
+          "Access Denied",
+          "You are not biometrically enrolled. Please contact the administrator to register your fingerprint first."
+        );
+        return;
+      }
+
+      // Authenticate AFTER verification
+      const res = await LocalAuthentication.authenticateAsync({
+        promptMessage: `Authenticate Staff: ${staff.name}`,
+      });
+
+      if (!res.success) return;
+
+      await handleStaffBiometricCheck({
+        staffId: actorId,
+        mode: checkType,
+        biometricVerified: true,
+        method: "fingerprint",
+      });
+
+      setConfirmation({
+        name: staff.name,
+        mode: checkType,
+        time: new Date().toLocaleTimeString(),
+      });
+    }
+
+    setTimeout(() => setConfirmation(null), 3000);
+  } catch (err: any) {
+    Alert.alert("Error", err?.message ?? String(err));
+  } finally {
+    setLoading(false);
+  }
+}
 
   function goToQR(mode?: "in" | "out") {
     const attendanceCheck = isAttendanceAllowed();
@@ -281,15 +396,35 @@ export default function CheckinScreen() {
         </View>
       ) : null}
 
-      {showBiometric && actor === "staff" ? (
-        <View className="flex-1 justify-center items-center px-6">
-          <MaterialCommunityIcons name="badge-account-outline" size={64} color="#2563EB" />
-          <Text className="mt-4 text-lg font-semibold text-dark">Staff Biometric Verification</Text>
-          <View className="flex-row mt-6">
-            <Pressable onPress={() => tryFingerprint("staff-user-id", "in")} className="bg-blue-600 px-6 py-3 rounded-xl mr-4"><Text className="text-white">Check-In</Text></Pressable>
-            <Pressable onPress={() => tryFingerprint("staff-user-id", "out")} className="bg-yellow-600 px-6 py-3 rounded-xl"><Text className="text-white">Check-Out</Text></Pressable>
-          </View>
-          <Pressable onPress={() => setShowBiometric(false)} className="mt-6 bg-red-500 px-6 py-3 rounded-xl"><Text className="text-white">Close</Text></Pressable>
+     {showBiometric && actor === "staff" ? (
+        <View className="flex-1">
+          {staffMembers.length === 0 ? (
+            <View className="flex-1 justify-center items-center px-6">
+              <ActivityIndicator size="large" color="#2563EB" />
+              <Text className="mt-4 text-dark font-semibold">Loading Staff List...</Text>
+            </View>
+          ) : (
+            <View className="flex-1">
+              <FlatList
+                data={staffMembers}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <StaffRow 
+                    staff={item} 
+                    onCheckIn={() => tryFingerprint(item.id, "in")} 
+                    onCheckOut={() => tryFingerprint(item.id, "out")} 
+                  />
+                )}
+                contentContainerStyle={{ padding: 16, paddingTop: 60 }}
+              />
+              <Pressable 
+                onPress={() => setShowBiometric(false)} 
+                className="absolute top-4 right-4 bg-red-500 px-4 py-2 rounded-full shadow-lg z-50"
+              >
+                <Text className="text-white font-semibold">Close</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       ) : null}
 

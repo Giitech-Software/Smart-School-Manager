@@ -50,6 +50,7 @@ export default function Home(): JSX.Element {
   const [showWelcome, setShowWelcome] = useState(true);
 
   const [autoMarking, setAutoMarking] = useState(false);
+const [showStartOptions, setShowStartOptions] = useState(false);
 
   // Step 2 — attendance settings state
  const [attendanceSettings, setAttendanceSettings] = useState<{
@@ -159,18 +160,15 @@ export default function Home(): JSX.Element {
 
   </View>
 
-  <Pressable
-    onPress={() =>
-  router.push({
-    pathname: "/attendance/checkin",
-    params: { actor: "student" },
-  })
-}
+ <Pressable
+  onPress={() => setShowStartOptions(true)}
+  className="bg-yellow-400 px-4 py-2 rounded-full"
+>
+  <Text className="text-blue-900 font-bold">
+    Start Attendance
+  </Text>
+</Pressable>
 
-    className="bg-yellow-400 px-4 py-2 rounded-full"
-  >
-    <Text className="text-blue-900 font-bold">Start</Text>
-  </Pressable>
 </View>
 </View>
 {/* Hero Image */}
@@ -222,6 +220,52 @@ export default function Home(): JSX.Element {
           </View>
         </View>
       )}
+{showStartOptions && (
+  <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/40 items-center justify-center px-6 z-50">
+    <View className="w-full bg-white rounded-3xl p-6 shadow-2xl">
+      <Text className="text-lg font-bold text-center mb-5">
+        Select Attendance Type
+      </Text>
+
+      <Pressable
+        onPress={() => {
+          setShowStartOptions(false);
+          router.push({
+            pathname: "/attendance/checkin",
+            params: { actor: "student" },
+          });
+        }}
+        className="bg-primary rounded-xl py-3 mb-3"
+      >
+        <Text className="text-white text-center font-semibold">
+          Student Attendance
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => {
+          setShowStartOptions(false);
+          router.push({
+            pathname: "/attendance/checkin",
+            params: { actor: "staff" },
+          });
+        }}
+        className="bg-blue-600 rounded-xl py-3"
+      >
+        <Text className="text-white text-center font-semibold">
+          Staff Attendance
+        </Text>
+      </Pressable>
+
+      <Pressable
+        onPress={() => setShowStartOptions(false)}
+        className="mt-4"
+      >
+        <Text className="text-center text-neutral">Cancel</Text>
+      </Pressable>
+    </View>
+  </View>
+)}
 
       {/* Content area */}
       <ScrollView contentContainerStyle={{ padding: 16 }} className="flex-1">

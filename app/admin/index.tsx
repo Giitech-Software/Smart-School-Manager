@@ -183,6 +183,7 @@ function InfiniteMarquee() {
   manageUsers: "bg-rose-100",
   manageParents: "bg-teal-100",
    manageStaff: "bg-orange-100", // ✅ Added color
+   generateStaffQR: "bg-indigo-100", // A distinct purple/blue for staff
 };
 
 const quickSetupHeadingColors = {
@@ -193,6 +194,7 @@ const quickSetupHeadingColors = {
   manageUsers: "text-rose-800",
   manageParents: "text-teal-800",
 manageStaff: "text-orange-800", // ✅ Added color
+generateStaffQR: "text-indigo-800",
 };
 
 const quickSetupIcons = {
@@ -203,6 +205,7 @@ const quickSetupIcons = {
   manageUsers: "people",
   manageParents: "family-restroom",
   manageStaff: "badge", // ✅ Added icon
+  generateStaffQR: "badge", // "badge" is perfect for staff/employee cards
 };
 
 
@@ -379,15 +382,41 @@ return (
             </View>
             <View>
               <Text className={`font-semibold ${quickSetupHeadingColors.generateQRs}`}>
-                Generate QRs
+                Students QR Cards
               </Text>
               <Text className="text-sm text-neutral mt-1">
-                Create signed QR codes for students
+                Generate signed QR codes for students
               </Text>
             </View>
           </View>
           <MaterialIcons name="chevron-right" size={20} color="#64748B" />
         </Pressable>
+
+{/* ✅ NEW: Generate Staff QR Cards */}
+<Pressable
+  onPress={() => router.push("/attendance/staff-qr-generator")}
+  className={`rounded-2xl p-4 shadow flex-row items-center justify-between mt-4 ${quickSetupColors.generateStaffQR}`}
+>
+  <View className="flex-row items-center space-x-3">
+    <View className="p-2 rounded-full bg-white/60">
+     <MaterialIcons
+  name="qr-code-scanner"
+  size={20} 
+  color="#1E293B"
+/>
+
+    </View>
+    <View>
+      <Text className={`font-semibold ${quickSetupHeadingColors.generateStaffQR}`}>
+        Staff QR Cards
+      </Text>
+      <Text className="text-sm text-neutral mt-1">
+        Generate digital ID cards for staff
+      </Text>
+    </View>
+  </View>
+  <MaterialIcons name="chevron-right" size={20} color="#64748B" />
+</Pressable>
 
         {/* Manage Classes */}
         <Pressable
