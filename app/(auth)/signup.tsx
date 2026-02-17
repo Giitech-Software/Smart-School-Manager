@@ -24,6 +24,10 @@ import { Picker } from "@react-native-picker/picker";
 
 import AppPicker from "@/components/AppPicker";
 import AppInput from "@/components/AppInput";
+
+import { createStaffFromUser } from "../../src/services/staff";
+
+
 function isValidEmail(email: string) {
   return /\S+@\S+\.\S+/.test(email);
 }
@@ -95,6 +99,24 @@ try {
   }
 } catch (e) {
   console.warn("upsertUser failed:", e);
+}
+if (
+  safeRole === "teacher" ||
+  safeRole === "staff" ||
+  safeRole === "non_teaching_staff"
+) {
+  try {
+    await createStaffFromUser(
+      credential.user.uid,
+      fullName.trim(),
+      email.trim(),
+      safeRole
+    );
+
+    console.log("Staff document created automatically");
+  } catch (err) {
+    console.error("Failed to create staff document:", err);
+  }
 }
 
 

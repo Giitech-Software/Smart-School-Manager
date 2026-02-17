@@ -14,7 +14,7 @@ import { db } from "../../app/firebase";
 import { type UserRole } from "./constants/roles";
 
 /* ---------------- Types ---------------- */
-
+ 
 
 export async function updateUserApproval(
   uid: string,
@@ -129,19 +129,35 @@ export async function upsertUser(user: AppUser): Promise<string> {
   ref,
   {
     uid: user.id,
-    displayName: user.displayName ?? null,
-    email: user.email ?? null,
 
-    // 🚫 Never allow admin at signup
-   role: user.role ?? "teacher",
+    ...(user.displayName !== undefined && {
+      displayName: user.displayName,
+    }),
 
+    ...(user.email !== undefined && {
+      email: user.email,
+    }),
 
-    // 🔐 SECURITY FLAGS (merge-safe)
-    approved: user.approved ?? false,
-    canTakeStaffAttendance: user.canTakeStaffAttendance ?? false,
-    canTakeStudentAttendance: user.canTakeStudentAttendance ?? false,
+    ...(user.role !== undefined && {
+      role: user.role,
+    }),
 
-    wards: user.wards ?? [],
+    ...(user.approved !== undefined && {
+      approved: user.approved,
+    }),
+
+    ...(user.canTakeStaffAttendance !== undefined && {
+      canTakeStaffAttendance: user.canTakeStaffAttendance,
+    }),
+
+    ...(user.canTakeStudentAttendance !== undefined && {
+      canTakeStudentAttendance: user.canTakeStudentAttendance,
+    }),
+
+    ...(user.wards !== undefined && {
+      wards: user.wards,
+    }),
+
     createdAt: user.createdAt ?? serverTimestamp(),
   },
   { merge: true }

@@ -15,6 +15,8 @@ import {
 import { db } from "../../app/firebase";
 import type { AttendanceRecord } from "./types";
 import { getAttendanceSettings } from "./attendanceSettings";
+import { recordAttendanceCore } from "./attendanceCore";
+
 
 
 // At the top of the file (below imports)
@@ -49,6 +51,8 @@ function normalizeAttendance(data: any): AttendanceRecord {
     checkInTime: data.checkInTime ?? null,
     checkOutTime: data.checkOutTime ?? null,
     status: data.status ?? "present",
+    method: data.method ?? "qr",          // ✅ SAFE DEFAULT
+    biometric: data.biometric ?? false,
   } as AttendanceRecord;
 }
 
@@ -75,6 +79,7 @@ export async function recordAttendance(
     type: "in" | "out";
     date: string;
     biometric?: boolean;
+    method?: "qr" | "fingerprint" | "face" | "manual";
   }
 ): Promise<AttendanceRecord> {
   const now = new Date().toISOString();
@@ -83,27 +88,19 @@ export async function recordAttendance(
      UPDATE EXISTING RECORD
   =============================== */
   if (record.id) {
-    const { id, createdAt, ...updateFields } = record;
-
-    if (record.type === "in" && !record.checkInTime) {
-      updateFields.checkInTime = now;
-      updateFields.type = "in";
-    }
-
-    if (record.type === "out") {
-      updateFields.checkOutTime = now;
-      updateFields.type = "out";
-    }
-
-    updateFields.biometric = record.biometric ?? false;
-
-    const ref = doc(db, "attendance", id);
-    await updateDoc(ref, updateFields);
-
-    return normalizeAttendance({
-      id: ref.id,
-      ...updateFields,
-    });
+    return normalizeAttendance(
+      await recordAttendanceCore({
+        record: {
+          ...record,
+          subjectType: "student",
+          subjectId: record.studentId,
+          checkInTime:
+            record.type === "in" && !record.checkInTime ? now : record.checkInTime,
+          checkOutTime:
+            record.type === "out" ? now : record.checkOutTime,
+        },
+      })
+    );
   }
 
   /* ===============================
@@ -115,22 +112,17 @@ export async function recordAttendance(
     ? "late"
     : "present";
 
-  const data = {
-    ...record,
-    createdAt: serverTimestamp(),
-    biometric: record.biometric ?? false,
-    type: "in",
-    checkInTime: now,
-    checkOutTime: null,
-    status,
-  };
-
-  const ref = await addDoc(attendanceCollection, data);
-
-  return normalizeAttendance({
-    id: ref.id,
-    ...data,
-  });
+  return normalizeAttendance(
+    await recordAttendanceCore({
+      record: {
+        ...record,
+        subjectType: "student",
+        subjectId: record.studentId,
+        status,
+        type: "in",
+      },
+    })
+  );
 }
 
 /**
@@ -165,26 +157,23 @@ export async function registerAttendanceUnified({
   classId,
   mode,
   biometric,
+  method = "qr",
 }: {
   studentId: string;
   classId: string;
   mode: "in" | "out";
   biometric?: boolean;
+  method?: "qr" | "fingerprint" | "face" | "manual";
 }): Promise<AttendanceRecord | void> {
   const date = todayISO();
 
-// 🔒 GLOBAL DAILY GUARD (NEW — SAFE)
-const anyToday = await findAnyAttendanceForStudentOnDate(studentId, date);
+  // 🔒 GLOBAL DAILY GUARD
+  const anyToday = await findAnyAttendanceForStudentOnDate(studentId, date);
+  if (mode === "in" && anyToday) {
+    throw new Error("Student already checked-in today. Please check-out first.");
+  }
 
-if (mode === "in" && anyToday) {
-  throw new Error(
-    "Student already checked-in today. Please check-out first."
-  );
-}
-
-// ⬇️ EXISTING LOGIC (UNCHANGED)
-const existing = await findAttendance(studentId, classId, date);
-
+  const existing = await findAttendance(studentId, classId, date);
 
   if (!existing) {
     if (mode === "in") {
@@ -194,6 +183,7 @@ const existing = await findAttendance(studentId, classId, date);
         type: "in",
         date,
         biometric: biometric === true,
+        method, // ✅ tracked
       });
     }
     throw new Error("Student must check-in before checking-out.");
@@ -218,14 +208,15 @@ const existing = await findAttendance(studentId, classId, date);
       type: "out",
       checkInTime: rec.checkInTime,
       biometric: biometric === true,
+      method: rec.method, // ✅ PRESERVE ORIGINAL METHOD
     });
   }
 
   throw new Error("Student already checked-in today.");
 }
+
 /**
  * Find ANY attendance for a student on a date (regardless of class)
- * SAFE: read-only helper
  */
 async function findAnyAttendanceForStudentOnDate(
   studentId: string,
@@ -291,52 +282,40 @@ export async function getAttendanceForDate(
 
 /**
  * Auto-mark absent students at the end of the day
- * ✅ Only runs if current time >= closeAfter
  */
 export async function autoMarkAbsentsForToday() {
   try {
     const settings = await getAttendanceSettings();
-// 🔒 safety check: make sure settings exist
     if (!settings || !settings.closeAfter) return;
-    // 1) only run after closing time
     if (!hasPassedClosingTime(settings.closeAfter)) return;
 
-    const today = new Date().toISOString().split("T")[0]; // "2026-01-13"
+    const today = todayISO();
 
-    // 2) Get all students
     const studentsSnap = await getDocs(collection(db, "students"));
 
-    // 3) Get today’s attendance records
     const attendanceSnap = await getDocs(
-      query(
-        collection(db, "attendance"),
-        where("date", "==", today)
-      )
+      query(collection(db, "attendance"), where("date", "==", today))
     );
 
-    // 4) Build set of students already marked today
     const marked = new Set(
       attendanceSnap.docs.map(doc => doc.data().studentId)
     );
 
-    // 5) Loop and mark missing students as ABSENT
     const promises: Promise<any>[] = [];
 
     studentsSnap.forEach(studentDoc => {
-      const studentId = studentDoc.id;
-
-      // skip if already marked
-      if (marked.has(studentId)) return;
+      if (marked.has(studentDoc.id)) return;
 
       const ref = doc(collection(db, "attendance"));
 
       promises.push(
         setDoc(ref, {
-          studentId,
+          studentId: studentDoc.id,
           classId: studentDoc.data().classId ?? "",
           date: today,
           status: "absent",
-          type: "auto",
+          type: "in",
+          method: "manual", // ✅ explicit
           biometric: false,
           checkInTime: null,
           checkOutTime: null,

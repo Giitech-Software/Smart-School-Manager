@@ -17,7 +17,7 @@ import { listClasses } from "../../src/services/classes";
 import { listStudents } from "../../src/services/students";
 
 import { Animated, Dimensions } from "react-native";
-
+import { listStaff } from "../../src/services/staff"; // ✅ Add this import
 
 interface Class {
   id: string;
@@ -40,6 +40,7 @@ const [pageReady, setPageReady] = React.useState(false); // ✅ Add this line
 const [classesExpanded, setClassesExpanded] = React.useState(false);
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
+  const [staffCount, setStaffCount] = React.useState<number | null>(null); // ✅ Add this
 const marqueeItems = [
   { text: "Manage Terms", color: "#EF4444" },        // red
   { text: "Manage Students", color: "#3B82F6" },     // blue
@@ -142,6 +143,7 @@ function InfiniteMarquee() {
     const weeks = await listWeeks().catch(() => []);
     const clsList = await listClasses().catch(() => []);
     const students = await listStudents().catch(() => []);
+      const staffList = await listStaff().catch(() => []); // ✅ Fetch staff
 
     if (!mounted) return;
 
@@ -149,6 +151,7 @@ function InfiniteMarquee() {
     setWeeksCount(weeks.length);
     setClassesCount(clsList.length);
     setStudentsCount(students.length);
+    setStaffCount(staffList.length); // ✅ Set staff count
     setClasses(clsList as Class[]);
   } catch (err) {
     console.error("loadCounts error:", err);
@@ -179,7 +182,7 @@ function InfiniteMarquee() {
   generateQRs: "bg-violet-100",
   manageUsers: "bg-rose-100",
   manageParents: "bg-teal-100",
- 
+   manageStaff: "bg-orange-100", // ✅ Added color
 };
 
 const quickSetupHeadingColors = {
@@ -189,7 +192,7 @@ const quickSetupHeadingColors = {
   generateQRs: "text-violet-800",
   manageUsers: "text-rose-800",
   manageParents: "text-teal-800",
-
+manageStaff: "text-orange-800", // ✅ Added color
 };
 
 const quickSetupIcons = {
@@ -199,7 +202,7 @@ const quickSetupIcons = {
   generateQRs: "qr-code",
   manageUsers: "people",
   manageParents: "family-restroom",
-
+  manageStaff: "badge", // ✅ Added icon
 };
 
 
@@ -327,7 +330,40 @@ return (
             <MaterialIcons name="chevron-right" size={20} color="#64748B" />
           </View>
         </Pressable>
-
+  {/* ✅ NEW: Manage Staff Button */}
+          <Pressable
+            onPress={() => router.push("/staff")}
+            className={`rounded-2xl p-4 shadow flex-row items-center justify-between ${quickSetupColors.manageStaff}`}
+          >
+            <View className="flex-row items-center space-x-3">
+              <View className="p-2 rounded-full bg-white/60">
+                <MaterialIcons
+                  name={quickSetupIcons.manageStaff as any}
+                  size={20}
+                  color="#1E293B"
+                />
+              </View>
+              <View>
+                <Text className={`font-semibold ${quickSetupHeadingColors.manageStaff}`}>
+                  Manage Staff
+                </Text>
+                <Text className="text-sm text-neutral mt-1">
+                  Enroll staff and manage biometric access
+                </Text>
+              </View>
+            </View>
+            <View className="items-end">
+              {loadingCounts ? (
+                <ActivityIndicator />
+              ) : (
+                <Text className="text-sm text-neutral">
+                  {staffCount ?? 0} existing
+                </Text>
+              )}
+              <MaterialIcons name="chevron-right" size={20} color="#64748B" />
+            </View>
+          </Pressable>
+          
         {/* Generate QRs */}
         <Pressable
           onPress={() => router.push("/students/qr-generator")}
@@ -477,7 +513,7 @@ return (
 
           <Pressable
             onPress={() => router.push("/admin/attendance-settings")}
-            className="bg-indigo-600 rounded-xl p-4 items-center"
+             className="bg-indigo-600 rounded-xl p-4 items-center"
           >
             <Text className="text-white font-semibold text-lg">
               Go to Attendance Time

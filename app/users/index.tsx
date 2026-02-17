@@ -10,11 +10,7 @@ import {
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 
-import {
-  listUsers,
-  deleteUser,
-  AppUser,
-} from "../../src/services/users";
+import { listUsers, deleteUser, AppUser } from "../../src/services/users";
 import { MaterialIcons } from "@expo/vector-icons";
 import AppInput from "../../components/AppInput";
 
@@ -83,14 +79,9 @@ export default function UsersList() {
   function confirmDelete(user: AppUser) {
     Alert.alert(
       "Delete User",
-      `Are you sure you want to delete ${
-        user.displayName ?? user.email ?? "this user"
-      }?\n\nThis action cannot be undone.`,
+      `Are you sure you want to delete ${user.displayName ?? user.email ?? "this user"}?\n\nThis action cannot be undone.`,
       [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
+        { text: "Cancel", style: "cancel" },
         {
           text: "Delete",
           style: "destructive",
@@ -111,16 +102,10 @@ export default function UsersList() {
     <View className="flex-1 bg-slate-300 p-4">
       {/* HEADER */}
       <View className="flex-row items-center mb-2">
-        <Pressable
-          onPress={() => router.back()}
-          className="p-1 mr-2"
-          hitSlop={8}
-        >
+        <Pressable onPress={() => router.back()} className="p-1 mr-2" hitSlop={8}>
           <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
         </Pressable>
-        <Text className="text-2xl font-extrabold text-slate-900">
-          Manage Users
-        </Text>
+        <Text className="text-2xl font-extrabold text-slate-900">Manage Users</Text>
       </View>
 
       {/* SEARCH BAR */}
@@ -139,12 +124,8 @@ export default function UsersList() {
           <View className="bg-white rounded-2xl p-4 mb-3 flex-row items-center justify-between">
             {/* LEFT: Name + Role */}
             <View className="flex-1">
-              <Text className="text-lg font-semibold text-slate-900">
-                {item.displayName ?? item.email}
-              </Text>
-              <Text className="text-sm text-neutral mt-1">
-                {item.role ?? "—"}
-              </Text>
+              <Text className="text-lg font-semibold text-slate-900">{item.displayName ?? item.email}</Text>
+              <Text className="text-sm text-neutral mt-1">{item.role ?? "—"}</Text>
             </View>
 
             {/* RIGHT: Actions */}
@@ -168,15 +149,15 @@ export default function UsersList() {
               )}
 
               {/* DELETE */}
-              <Pressable
-                onPress={() => confirmDelete(item)}
-                className="p-2 rounded"
-              >
+              <Pressable onPress={() => confirmDelete(item)} className="p-2 rounded">
                 <Text className="text-red-500 font-semibold">Delete</Text>
               </Pressable>
             </View>
           </View>
         )}
+        ListEmptyComponent={
+          <Text className="text-center text-neutral mt-8">No users found.</Text>
+        }
       />
     </View>
   );

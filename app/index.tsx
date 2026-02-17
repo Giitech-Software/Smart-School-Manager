@@ -160,7 +160,13 @@ export default function Home(): JSX.Element {
   </View>
 
   <Pressable
-    onPress={() => router.push("/attendance/checkin")}
+    onPress={() =>
+  router.push({
+    pathname: "/attendance/checkin",
+    params: { actor: "student" },
+  })
+}
+
     className="bg-yellow-400 px-4 py-2 rounded-full"
   >
     <Text className="text-blue-900 font-bold">Start</Text>
@@ -234,6 +240,27 @@ export default function Home(): JSX.Element {
               </View>
             </Pressable>
           </Link>
+<Link
+  href={{
+    pathname: "/attendance/checkin",
+    params: { actor: "staff" },
+  }}
+  asChild
+>
+  <Pressable className="bg-white rounded-2xl p-4 shadow flex-row items-center">
+    <View className="p-3 rounded-lg bg-blue-500/10 mr-3">
+      <MaterialIcons name="badge" size={22} color="#2563EB" />
+    </View>
+    <View>
+      <Text className="font-semibold text-dark">
+        Staff Check-In
+      </Text>
+      <Text className="text-sm text-neutral mt-1">
+        Staff attendance tracking
+      </Text>
+    </View>
+  </Pressable>
+</Link>
 
         
          <Pressable

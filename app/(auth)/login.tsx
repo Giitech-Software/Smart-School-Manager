@@ -59,6 +59,11 @@ if (user.role !== "admin" && user.approved !== true) {
   router.replace("/(auth)/pending-approval");
   return;
 }
+if (user.role !== "admin" && user.approved !== true) {
+  await signOutUser();
+  router.replace("/(auth)/pending-approval");
+  return;
+}
 
 
 
@@ -113,7 +118,7 @@ if (user.role === "parent" || (user.wards?.length ?? 0) > 0) {
         <View className="bg-white rounded-lg p-6">
           {/* Title */}
           <Text className="text-3xl font-bold mb-4 text-center">
-            Sign In
+            Sign In 
           </Text>
 
           {/* Email */}

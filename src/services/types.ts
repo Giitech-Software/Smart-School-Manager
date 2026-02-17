@@ -4,39 +4,42 @@ export type Student = {
   id: string;
   shortId?: string;
 
-  name?: string; 
+  name?: string;
   rollNo?: string;
 
-   studentId?: string;      // ✅ NEW (display ID) 
-  /** Short class identifier (slug like "business-management") */
+  studentId?: string; // display ID
   classId?: string;
-// 👇 ADD THIS
+
   isActive?: boolean;
-  /** Firestore document id of class (authoritative) */
   classDocId?: string;
-// ✅ add these
-  faceEmbedding?: number[] | null;
+
+  // ✅ biometric fields (SAFE)
   faceEnrolledAt?: string | null;
+  faceEmbedding?: number[];
   fingerprintId?: string;
 
   createdAt?: any;
   updatedAt?: any;
 };
- 
 
 export type AttendanceRecord = {
   id?: string; // Firestore doc id
+
   studentId: string;
   classId?: string;
-  
-  date: string;                     // ISO date (YYYY-MM-DD)
-  type: "in" | "out";               // check-in or check-out
 
-  checkInTime?: string;             // ISO datetime
-  checkOutTime?: string | null;     // allow null to fix TS error
+  date: string;               // YYYY-MM-DD
+  type: "in" | "out";         // check-in or check-out
+
+  checkInTime?: string;
+  checkOutTime?: string | null;
 
   status?: "present" | "absent" | "late" | "excused";
-  method?: "qr" | "fingerprint" | "manual";
+
+  // ✅ FIXED + COMPLETE
+  method?: "qr" | "fingerprint" | "face" | "manual";
+
+  biometric?: boolean;
 
   createdAt?: {
     seconds: number;
@@ -50,13 +53,11 @@ export type Term = {
   startDate: string;
   endDate: string;
 
-  /** 🔑 marks the active academic term */
   isCurrent?: boolean;
 
   createdAt?: any;
   updatedAt?: any;
 };
-
 
 export type AdminLog = {
   id: string;
@@ -70,3 +71,16 @@ export type AdminLog = {
   metadata?: Record<string, any>;
   createdAt?: any;
 };
+export type AttendanceActor = "student" | "staff";
+
+export interface Staff {
+  id?: string;
+  staffId?: string;     // human-readable ID
+   userUid?: string; // 👈 new
+  name: string;
+  email: string;
+  role?: string;        // teacher, admin, non-teaching, etc
+  fingerprintId?: string;
+  createdAt?: any;
+  updatedAt?: any;
+}

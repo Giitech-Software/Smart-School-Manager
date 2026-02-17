@@ -1,8 +1,9 @@
-// mobile/app.config.js
 import 'dotenv/config';
 
 export default ({ config }) => ({
   ...config,
+
+  owner: "giitech_software_systems",   // 👈 ADD THIS LINE
 
   name: "ASTEM Attendance Register",
   slug: "mobile",
@@ -12,7 +13,6 @@ export default ({ config }) => ({
   scheme: "mobile",
   userInterfaceStyle: "automatic",
 
-  /** 🔹 REQUIRED FOR EAS UPDATE */
   updates: {
     url: "https://u.expo.dev/39fe1569-e82e-4a40-9ee4-9c7c6f47b60b",
     fallbackToCacheTimeout: 0,
@@ -22,9 +22,7 @@ export default ({ config }) => ({
     policy: "appVersion",
   },
 
-  /** 🔴 Disable for Expo Go */
   newArchEnabled: true,
-
   icon: "./assets/images/icon.png",
 
   ios: {
@@ -42,9 +40,7 @@ export default ({ config }) => ({
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     softwareKeyboardLayoutMode: "resize",
-
     permissions: ["CAMERA"],
-
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon-foreground.png",
       backgroundColor: "#0A4FB3",
@@ -54,15 +50,21 @@ export default ({ config }) => ({
   plugins: [
     "expo-web-browser",
     "expo-router",
-
-    [
+    /*[
       "react-native-vision-camera",
       {
-        cameraPermissionText:
-          "Allow camera access for face attendance",
+        cameraPermissionText: "Allow camera access for face attendance",
+        enableFrameProcessors: true,
+      },
+    ],*/
+    [
+      "expo-build-properties",
+      {
+        android: {
+          minSdkVersion: 26,
+        },
       },
     ],
-
     [
       "expo-splash-screen",
       {
@@ -71,7 +73,6 @@ export default ({ config }) => ({
         backgroundColor: "#E6F4FE",
       },
     ],
-
     "expo-secure-store",
   ],
 
@@ -90,11 +91,9 @@ export default ({ config }) => ({
     FIREBASE_AUTH_DOMAIN: process.env.FIREBASE_AUTH_DOMAIN,
     FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
     FIREBASE_STORAGE_BUCKET: process.env.FIREBASE_STORAGE_BUCKET,
-    FIREBASE_MESSAGING_SENDER_ID:
-      process.env.FIREBASE_MESSAGING_SENDER_ID,
+    FIREBASE_MESSAGING_SENDER_ID: process.env.FIREBASE_MESSAGING_SENDER_ID,
     FIREBASE_APP_ID: process.env.FIREBASE_APP_ID,
-    FIREBASE_MEASUREMENT_ID:
-      process.env.FIREBASE_MEASUREMENT_ID,
+    FIREBASE_MEASUREMENT_ID: process.env.FIREBASE_MEASUREMENT_ID,
 
     eas: {
       projectId: "39fe1569-e82e-4a40-9ee4-9c7c6f47b60b",
