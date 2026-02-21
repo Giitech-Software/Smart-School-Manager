@@ -50,6 +50,8 @@ export default ({ config }) => ({
   plugins: [
     "expo-web-browser",
     "expo-router",
+     "@react-native-community/datetimepicker",
+
     /*[
       "react-native-vision-camera",
       {

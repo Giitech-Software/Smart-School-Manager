@@ -1,3 +1,4 @@
+//app/reports/index.tsx
 import React, { useEffect, useState, useMemo } from "react";
 import {
   View,
@@ -11,31 +12,45 @@ import {
 import { useRouter } from "expo-router";
 import { getAttendanceSummary } from "../../src/services/attendanceSummary";
 import { MaterialIcons } from "@expo/vector-icons";
-
+import { getAllStaffAttendanceInRange } from "../../src/services/staffAttendanceSummary";
 export default function ReportsDashboard() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [globalSummary, setGlobalSummary] = useState<any[]>([]);
+const [reportType, setReportType] = useState<"student" | "staff">("student");
 
-  /* ------------------------------------------------------------------ */
-  /* LOAD GLOBAL SUMMARY (PREVIEW) */
   /* ------------------------------------------------------------------ */
   useEffect(() => {
-    (async () => {
-      try {
-        setLoading(true);
-        const sum = await getAttendanceSummary({ includeStudentName: false });
-        setGlobalSummary(sum || []);
-      } catch (e) {
-        console.error("reports dashboard load", e);
-        Alert.alert("Failed to load reports preview");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
+  (async () => {
+    try {
+      setLoading(true);
 
+      if (reportType === "student") {
+        const sum = await getAttendanceSummary({
+          includeStudentName: false,
+        });
+        setGlobalSummary(sum || []);
+      } else {
+        const today = new Date();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(today.getDate() - 30);
+
+        const sum = await getAllStaffAttendanceInRange(
+          thirtyDaysAgo.toISOString().slice(0, 10),
+          today.toISOString().slice(0, 10)
+        );
+
+        setGlobalSummary(sum || []);
+      }
+    } catch (e) {
+      console.error("reports dashboard load", e);
+      Alert.alert("Failed to load reports preview");
+    } finally {
+      setLoading(false);
+    }
+  })();
+}, [reportType]);
   /* ------------------------------------------------------------------ */
   /* AGGREGATE TOTALS */
   /* ------------------------------------------------------------------ */
@@ -60,6 +75,29 @@ export default function ReportsDashboard() {
   };
 }, [globalSummary]);
 
+<View className="flex-row mb-4">
+  <Pressable
+    onPress={() => setReportType("student")}
+    className={`flex-1 py-2 rounded-l-xl ${
+      reportType === "student" ? "bg-blue-600" : "bg-slate-200"
+    }`}
+  >
+    <Text className="text-center font-semibold">
+      Student Reports
+    </Text>
+  </Pressable>
+
+  <Pressable
+    onPress={() => setReportType("staff")}
+    className={`flex-1 py-2 rounded-r-xl ${
+      reportType === "staff" ? "bg-blue-600" : "bg-slate-200"
+    }`}
+  >
+    <Text className="text-center font-semibold">
+      Staff Reports
+    </Text>
+  </Pressable>
+</View>
 
   /* ------------------------------------------------------------------ */
   /* TILE COMPONENT */
@@ -137,31 +175,90 @@ export default function ReportsDashboard() {
   Quick previews — tap a tile to open detailed reports
 </Text>
 
+<View className="flex-row mb-4">
+  <Pressable
+    onPress={() => setReportType("student")}
+    className={`flex-1 py-2 rounded-l-xl ${
+      reportType === "student" ? "bg-blue-600" : "bg-slate-200"
+    }`}
+  >
+    <Text
+      className={`text-center font-semibold ${
+        reportType === "student" ? "text-white" : "text-slate-700"
+      }`}
+    >
+      Student Reports
+    </Text>
+  </Pressable>
+
+  <Pressable
+    onPress={() => setReportType("staff")}
+    className={`flex-1 py-2 rounded-r-xl ${
+      reportType === "staff" ? "bg-blue-600" : "bg-slate-200"
+    }`}
+  >
+    <Text
+      className={`text-center font-semibold ${
+        reportType === "staff" ? "text-white" : "text-slate-700"
+      }`}
+    >
+      Staff Reports
+    </Text>
+  </Pressable>
+</View>
 
       <View className="mt-2">
         <Tile
           title="Daily Attendance"
           subtitle="Preview by day • Last 5 school days"
           color="bg-purple-500"
-          onPress={() => router.push("/reports/daily-report")}
+         onPress={() =>
+  router.push(
+    reportType === "student"
+      ? "/reports/daily-report"
+      : "/reports/staff-daily-report"
+  )
+}
+
         />
         <Tile
           title="Weekly Reports"
           subtitle="Attendance grouped by school week"
           color="bg-indigo-500"
-          onPress={() => router.push("/reports/weekly-report")}
+       onPress={() =>
+  router.push(
+    reportType === "student"
+      ? "/reports/weekly-report"
+      : "/reports/staff-weekly-report"
+  )
+}
+
         />
         <Tile
           title="Monthly Reports"
           subtitle="Attendance grouped by calendar month"
           color="bg-teal-500"
-          onPress={() => router.push("/reports/monthly-report")}
+         onPress={() =>
+  router.push(
+    reportType === "student"
+      ? "/reports/monthly-report"
+      : "/reports/staff-monthly-report"
+  )
+}
+
         />
         <Tile
           title="Termly Reports"
           subtitle="Summaries by term"
           color="bg-rose-500"
-          onPress={() => router.push("/reports/termly-report")}
+         onPress={() =>
+  router.push(
+    reportType === "student"
+      ? "/reports/termly-report"
+      : "/reports/staff-termly-report"
+  )
+}
+
         />
       </View>
 
@@ -204,12 +301,12 @@ export default function ReportsDashboard() {
 
     <View>
       <Text className="text-xs text-slate-500">Attendance %</Text>
-      <Text className="text-lg font-bold text-slate-900">
-        {totals.pct.toFixed(1)}%
-      </Text>
-    </View>
-  </View>
-</View>
-    </ScrollView>
-  );
-}
+                                    <Text className="text-lg font-bold text-slate-900">
+                                      {totals.pct.toFixed(1)}%
+                                    </Text>
+                                  </View>
+                                </View>
+                              </View>
+                                  </ScrollView>
+                                );
+                              }

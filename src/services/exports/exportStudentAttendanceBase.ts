@@ -1,5 +1,5 @@
 import { studentAttendancePdfTemplate } from "./studentAttendancePdfTemplate";
-import { buildStudentAttendancePdf } from "./buildStudentAttendancePdf";
+import { buildAttendancePdf } from "./buildAttendancePdf";
 import type { AttendanceRecord } from "../types";
 
 type ExportBaseParams = {
@@ -22,7 +22,7 @@ export async function exportStudentAttendanceBase(
 ) {
   const html = studentAttendancePdfTemplate(params);
 
-  await buildStudentAttendancePdf({
+  await buildAttendancePdf({
     html,
     fileName: params.title,
   });

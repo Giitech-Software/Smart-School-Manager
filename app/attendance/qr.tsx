@@ -265,68 +265,64 @@ try {
   const currentActor = params?.actor ?? "student";
 
   if (currentActor === "staff") {
-    // ============================
-    // 👨‍🏫 STAFF FLOW
-    // ============================
+  // ============================
+  // 👨‍🏫 STAFF FLOW (Updated for recordAttendanceCore pattern)
+  // ============================
 
-    // 1️⃣ Safety check for signed QR role
-    if (isSignedPayload && parsedJson.role !== "staff") {
-      Alert.alert("Invalid QR", "This QR code is not for a staff member.");
+  // 1️⃣ Safety check for signed QR role
+  if (isSignedPayload && parsedJson.role !== "staff") {
+    Alert.alert("Invalid QR", "This QR code is not for a staff member.");
+    setProcessing(false);
+    setScanned(false);
+    return;
+  }
+
+  const finalId = scannedId; // e.g. "TCH-0017"
+
+  // 2️⃣ Find the actual staff document in Firestore
+  let staffDocId: string | null = null;
+  let staffName: string = "Staff Member";
+
+  const qStaff = query(
+    collection(db, "staff"),
+    where("staffId", "==", finalId)
+  );
+
+  const snapStaff = await getDocs(qStaff);
+
+  if (snapStaff.empty) {
+    // Fallback: maybe the QR contains the document ID itself
+    const directDoc = await getDoc(doc(db, "staff", finalId));
+
+    if (directDoc.exists()) {
+      staffDocId = directDoc.id;
+      staffName = directDoc.data()?.name ?? "Staff Member";
+    } else {
+      Alert.alert("Unknown Staff", `No staff record found for ID: ${finalId}`);
       setProcessing(false);
       setScanned(false);
       return;
     }
-
-    // 2️⃣ Lookup staff by staffId field
-   // 2️⃣ Lookup staff safely
-let staffDoc: any = null;
-
-// Try matching by custom staffId field
-const qStaff = query(
-  collection(db, "staff"),
-where("staffId", "==", scannedId)
-
-);
-
-const snapStaff = await getDocs(qStaff);
-
-if (!snapStaff.empty) {
-  const d = snapStaff.docs[0];
-  staffDoc = { id: d.id, ...(d.data() as any) };
-} else {
-  // Fallback: try matching by Firebase document ID
-  try {
- const staffDocRef = doc(db, "staff", scannedId);
-
-    const staffSnap = await getDoc(staffDocRef);
-
-    if (staffSnap.exists()) {
-      staffDoc = { id: staffSnap.id, ...staffSnap.data() };
-    }
-  } catch {}
-}
-
-if (!staffDoc) {
-  Alert.alert("Unknown Staff", "No staff record matches this ID.");
-  setProcessing(false);
-  setScanned(false);
-  return;
-}
-
-
-    // 3️⃣ Register staff attendance
-    await registerStaffAttendance({
-      staffId: staffDoc.id,
-      mode: mode,
-      method: "qr",
-      biometric: false,
-    });
-
-    Alert.alert(
-      "Success",
-      `Staff: ${staffDoc.name} ${mode === "in" ? "checked in" : "checked out"}.`
-    );
   } else {
+    staffDocId = snapStaff.docs[0].id;
+    staffName = snapStaff.docs[0].data()?.name ?? "Staff Member";
+  }
+
+  // 3️⃣ Call your existing service
+  // This internally calls findStaffAttendanceForDate + recordAttendanceCore
+  await registerStaffAttendance({
+    staffId: staffDocId,
+    mode: mode,
+    method: "qr",
+    biometric: false,
+  });
+
+  Alert.alert(
+    "Success",
+    `${staffName} ${mode === "in" ? "checked in" : "checked out"} successfully.`
+  );
+}
+ else {
     // ============================
     // 👨‍🎓 STUDENT FLOW (Existing)
     // ============================

@@ -51,7 +51,8 @@ export default function Home(): JSX.Element {
 
   const [autoMarking, setAutoMarking] = useState(false);
 const [showStartOptions, setShowStartOptions] = useState(false);
-
+const [showReportOptions, setShowReportOptions] = useState(false);
+const [loadingReports, setLoadingReports] = useState(false);
   // Step 2 — attendance settings state
  const [attendanceSettings, setAttendanceSettings] = useState<{
   lateAfter?: string;
@@ -182,44 +183,43 @@ const [showStartOptions, setShowStartOptions] = useState(false);
 
 
 
+{/* 🌟 Welcome Popup */}
+{showWelcome && (
+  <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/40 items-center justify-center px-6 z-50">
+    <View className="w-full bg-white rounded-3xl p-6 shadow-2xl">
+      <LinearGradient
+        colors={["#1E3A8A", "#2563EB", "#0EA5E9"]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        className="rounded-2xl p-4"
+      >
+        <Text className="text-xl font-extrabold text-yellow-300 text-center">
+          Welcome to ASTEM
+        </Text>
 
+        <Text className="text-sm text-white mt-2 text-center leading-5">
+          Attendance Register
+        </Text>
 
-      {/* 🌟 Welcome Popup */}
-      {showWelcome && (
-        <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/40 items-center justify-center px-6 z-50">
-          <View className="w-full bg-white rounded-3xl p-6 shadow-2xl">
-            <LinearGradient
-              colors={["#1E3A8A", "#2563EB", "#0EA5E9"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              className="rounded-2xl p-4"
-            >
-              <Text className="text-xl font-extrabold text-yellow-300 text-center">
-                Welcome to ASTEM
-              </Text>
-
-              <Text className="text-sm text-white mt-2 text-center leading-5">
-                Accra Science, Technology, Engineering & Mathematics (ASTEM)
-              </Text>
-
-              <View className="mt-4 bg-white/20 p-3 rounded-xl">
-                <Text className="text-white text-center text-sm">
-                  Manage Attendance • Students • Reports
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={() => setShowWelcome(false)}
-                className="mt-5 bg-white rounded-full py-3"
-              >
-                <Text className="text-primary font-semibold text-center">
-                  Continue
-                </Text>
-              </Pressable>
-            </LinearGradient>
-          </View>
+        <View className="mt-4 bg-white/20 p-3 rounded-xl">
+          <Text className="text-white text-center text-sm">
+            Manage Attendance • Staff • Students • Reports
+          </Text>
         </View>
-      )}
+
+        <Pressable
+          onPress={() => setShowWelcome(false)}
+          className="mt-5 bg-white rounded-full py-3"
+        >
+          <Text className="text-primary font-semibold text-center">
+            Continue
+          </Text>
+        </Pressable>
+      </LinearGradient>
+    </View>
+  </View>
+)}
+
 {showStartOptions && (
   <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/40 items-center justify-center px-6 z-50">
     <View className="w-full bg-white rounded-3xl p-6 shadow-2xl">
