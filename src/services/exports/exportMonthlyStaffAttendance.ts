@@ -1,18 +1,46 @@
-// mobile/src/services/exports/exportDailyStaffAttendance.ts
 import * as Print from "expo-print";
 import * as Sharing from "expo-sharing";
 import { Platform } from "react-native";
-import { getAllStaffAttendanceInRange, getStaffAttendanceInRange } from "../staffAttendanceSummary";
+
 import { getStaffGlobalSummary } from "../staffAttendanceSummary";
 import { attendanceTableStyles } from "./generateAttendanceRows";
-/* ------------------------------------------------------------------
-   Helpers for generating table rows & styles
-------------------------------------------------------------------- */
 
+import { exportStaffAttendancePdf } from "./exportStaffAttendancePdf";
 
-/* ------------------------------------------------------------------
-   Build table rows HTML
-------------------------------------------------------------------- */
+function getMonthRange(year: number, month: number) {
+  const from = new Date(year, month, 1);
+  const to = new Date(year, month + 1, 0);
+
+  return {
+    fromIso: from.toISOString().slice(0, 10),
+    toIso: to.toISOString().slice(0, 10),
+  };
+}
+
+export async function exportMonthlySingleStaffAttendance(
+  staffId: string,
+  year: number,
+  month: number // 0-based
+) {
+  const { fromIso, toIso } = getMonthRange(year, month);
+
+  await exportStaffAttendancePdf({
+    staffId,
+    fromIso,
+    toIso,
+    title: "Monthly Staff Attendance Report",
+  });
+}
+/* ---------------------------------------------
+   Monthly Staff Attendance PDF Export
+---------------------------------------------- */
+
+export type ExportMonthlyStaffPdfOptions = {
+  fromIso: string;
+  toIso: string;
+  label: string;
+};
+
 function generateStaffRows(rows: any[]) {
   return rows
     .map((r, i) => {
@@ -35,7 +63,7 @@ function generateStaffRows(rows: any[]) {
 
           <td class="${rowClass}" style="text-align:left">
             <div style="font-weight:600">
-              ${r.staffName ?? "Unknown"}
+              ${r.staffName}
             </div>
             ${
               r.displayId
@@ -48,61 +76,69 @@ function generateStaffRows(rows: any[]) {
 
           <td class="present">${r.presentCount ?? 0}</td>
           <td class="late">${r.lateCount ?? 0}</td>
+          <td class="total">${r.attendedSessions ?? 0}</td>
           <td class="absent">${r.absentCount ?? 0}</td>
-          <td class="percent">
-            ${percent.toFixed(1)}%
-          </td>
+          <td class="percent">${percent.toFixed(1)}%</td>
         </tr>
       `;
     })
     .join("");
 }
-/* ------------------------------------------------------------------
-   Export function
-------------------------------------------------------------------- */
-export type ExportDailyStaffPdfOptions = {
-  dateIso: string;
-};
 
-export async function exportDailyStaffAttendance(opts: ExportDailyStaffPdfOptions) {
+export async function exportMonthlyStaffAttendance(
+  opts: ExportMonthlyStaffPdfOptions
+) {
+  const { fromIso, toIso, label } = opts;
+
   if (Platform.OS === "web") {
     throw new Error(
       "PDF export is not supported on web. Please use the mobile app."
     );
   }
 
-  const { dateIso } = opts;
+  const title = "Monthly Staff Attendance Report";
 
-  // Fetch all staff attendance for the selected day
-
-
-// With this:
-
-
-const summaries = await getStaffGlobalSummary(dateIso, dateIso);
+  const summaries = await getStaffGlobalSummary(fromIso, toIso);
 
   if (!summaries || summaries.length === 0) {
-    throw new Error("No staff attendance records found for this day");
+    throw new Error("No staff attendance records found for this month");
   }
 
-  // Build HTML table rows
   const rowsHtml = generateStaffRows(summaries);
 
-  // Full HTML
- const html = `
+  const html = `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8" />
   <style>
     ${attendanceTableStyles}
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto;
+      padding: 24px;
+      color: #111;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 6px;
+    }
+
+    .meta {
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 14px;
+      color: #555;
+    }
   </style>
 </head>
 <body>
-  <h1>Daily Staff Attendance Report</h1>
+  <h1>${title}</h1>
 
   <div class="meta">
-    <div>${dateIso}</div>
+    <div>${label}</div>
+    <div>${fromIso} → ${toIso}</div>
   </div>
 
   <table>
@@ -112,6 +148,7 @@ const summaries = await getStaffGlobalSummary(dateIso, dateIso);
         <th>Staff</th>
         <th class="present">Present</th>
         <th class="late">Late</th>
+        <th class="total">Attended</th>
         <th class="absent">Absent</th>
         <th class="percent">%</th>
       </tr>
@@ -124,17 +161,15 @@ const summaries = await getStaffGlobalSummary(dateIso, dateIso);
 </html>
 `;
 
-  // Generate PDF
   const result = await Print.printToFileAsync({ html });
 
   if (!result?.uri) {
     throw new Error("Failed to generate PDF file");
   }
 
-  // Share PDF
   await Sharing.shareAsync(result.uri, {
     mimeType: "application/pdf",
-    dialogTitle: "Export Daily Staff Attendance PDF",
+    dialogTitle: "Export Monthly Staff Attendance PDF",
     UTI: "com.adobe.pdf",
   });
 }

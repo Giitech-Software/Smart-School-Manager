@@ -27,30 +27,33 @@ export function staffAttendancePdfTemplate({
       ? `<tr><td colspan="5">No attendance records</td></tr>`
       : records
           .map((r, idx) => {
-            const checkIn = r.checkInTime
-              ? new Date(r.checkInTime).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "—";
+  const status =
+    r.status ?? (r.checkInTime ? "present" : "absent");
 
-            const checkOut = r.checkOutTime
-              ? new Date(r.checkOutTime).toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })
-              : "—";
+  const checkIn = r.checkInTime
+    ? new Date(r.checkInTime).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
 
-            return `
-              <tr class="${r.status}">
-                <td>${idx + 1}</td>
-                <td>${new Date(r.date).toLocaleDateString()}</td>
-                <td class="status ${r.status}">${r.status}</td>
-                <td>${checkIn}</td>
-                <td>${checkOut}</td>
-              </tr>
-            `;
-          })
+  const checkOut = r.checkOutTime
+    ? new Date(r.checkOutTime).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "—";
+
+  return `
+    <tr class="${status}">
+      <td>${idx + 1}</td>
+      <td>${new Date(r.date).toLocaleDateString()}</td>
+      <td class="status ${status}">${status}</td>
+      <td>${checkIn}</td>
+      <td>${checkOut}</td>
+    </tr>
+  `;
+})
           .join("");
 
   return `
