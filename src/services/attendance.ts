@@ -324,7 +324,39 @@ export async function autoMarkAbsentsForToday() {
         })
       );
     });
+/* ===============================
+   AUTO-MARK STAFF ABSENT
+================================= */
 
+const staffSnap = await getDocs(collection(db, "staff"));
+
+const markedStaff = new Set(
+  attendanceSnap.docs
+    .filter(doc => doc.data().subjectType === "staff")
+    .map(doc => doc.data().subjectId)
+);
+
+staffSnap.forEach(staffDoc => {
+  if (markedStaff.has(staffDoc.id)) return;
+
+  const ref = doc(collection(db, "attendance"));
+
+  promises.push(
+    setDoc(ref, {
+      subjectType: "staff",
+      subjectId: staffDoc.id,
+      date: today,
+      status: "absent",
+      type: "in",
+      method: "manual",
+      biometric: false,
+      checkInTime: null,
+      checkOutTime: null,
+      createdAt: serverTimestamp(),
+      auto: true,
+    })
+  );
+});
     await Promise.all(promises);
     console.log("ABSENT auto-mark completed");
   } catch (err) {

@@ -9,38 +9,82 @@ import {
   Alert,
     Image,   // ✅ add this
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams  } from "expo-router";
 import { getAttendanceSummary } from "../../src/services/attendanceSummary";
 import { MaterialIcons } from "@expo/vector-icons";
-import { getAllStaffAttendanceInRange } from "../../src/services/staffAttendanceSummary";
+import { getStaffGlobalSummary, } from "../../src/services/staffAttendanceSummary";
+import useCurrentUser from "../../src/hooks/useCurrentUser";
 export default function ReportsDashboard() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [globalSummary, setGlobalSummary] = useState<any[]>([]);
+const [globalSummary, setGlobalSummary] = useState<any[]>([]);
+const [previewLabel, setPreviewLabel] = useState("");
+const { type } = useLocalSearchParams();   // ✅ declare FIRST
+const { userDoc, loading: userLoading } = useCurrentUser();
+
 const [reportType, setReportType] = useState<"student" | "staff">("student");
 
+// Sync route param → state
+useEffect(() => {
+  if (type === "staff") {
+    setReportType("staff");
+  } else {
+    setReportType("student");
+  }
+}, [type]);
   /* ------------------------------------------------------------------ */
-  useEffect(() => {
+function getPreviewRange(type: "student" | "staff") {
+  const today = new Date();
+
+  // ✅ STAFF → Last 30 calendar days
+  if (type === "staff") {
+    const from = new Date();
+    from.setDate(today.getDate() - 29);
+
+    return {
+      fromIso: from.toISOString().slice(0, 10),
+      toIso: today.toISOString().slice(0, 10),
+      label: "Last 30 days (preview)",
+    };
+  }
+
+  // ✅ STUDENTS → Last 5 working days
+  const dates: Date[] = [];
+  const current = new Date();
+
+  while (dates.length < 5) {
+    const day = current.getDay();
+    if (day !== 0 && day !== 6) {
+      dates.push(new Date(current));
+    }
+    current.setDate(current.getDate() - 1);
+  }
+
+  return {
+    fromIso: dates[dates.length - 1].toISOString().slice(0, 10),
+    toIso: dates[0].toISOString().slice(0, 10),
+    label: "Last 5 school days (preview)",
+  };
+}
+ useEffect(() => {
   (async () => {
     try {
       setLoading(true);
 
+     const range = getPreviewRange(reportType);
+const { fromIso, toIso } = range;
+setPreviewLabel(range.label);
+
       if (reportType === "student") {
         const sum = await getAttendanceSummary({
+          fromIso,
+          toIso,
           includeStudentName: false,
         });
         setGlobalSummary(sum || []);
       } else {
-        const today = new Date();
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(today.getDate() - 30);
-
-        const sum = await getAllStaffAttendanceInRange(
-          thirtyDaysAgo.toISOString().slice(0, 10),
-          today.toISOString().slice(0, 10)
-        );
-
+        const sum = await getStaffGlobalSummary(fromIso, toIso);
         setGlobalSummary(sum || []);
       }
     } catch (e) {
@@ -75,30 +119,6 @@ const [reportType, setReportType] = useState<"student" | "staff">("student");
   };
 }, [globalSummary]);
 
-<View className="flex-row mb-4">
-  <Pressable
-    onPress={() => setReportType("student")}
-    className={`flex-1 py-2 rounded-l-xl ${
-      reportType === "student" ? "bg-blue-600" : "bg-slate-200"
-    }`}
-  >
-    <Text className="text-center font-semibold">
-      Student Reports
-    </Text>
-  </Pressable>
-
-  <Pressable
-    onPress={() => setReportType("staff")}
-    className={`flex-1 py-2 rounded-r-xl ${
-      reportType === "staff" ? "bg-blue-600" : "bg-slate-200"
-    }`}
-  >
-    <Text className="text-center font-semibold">
-      Staff Reports
-    </Text>
-  </Pressable>
-</View>
-
   /* ------------------------------------------------------------------ */
   /* TILE COMPONENT */
   /* ------------------------------------------------------------------ */
@@ -129,17 +149,41 @@ const [reportType, setReportType] = useState<"student" | "staff">("student");
   /* LOADING STATE */
   /* ------------------------------------------------------------------ */
   if (loading) {
-    return (
-      <View className="flex-1 items-center justify-center bg-slate-50">
-        <ActivityIndicator size="large" />
-      </View>
-    );
-  }
+  return (
+    <View className="flex-1 items-center justify-center bg-slate-50">
+      <ActivityIndicator size="large" />
+    </View>
+  );
+}
+
+// 🔐 ROLE PROTECTION STARTS HERE
+
+if (userLoading) {
+  return (
+    <View className="flex-1 items-center justify-center">
+      <ActivityIndicator />
+    </View>
+  );
+}
+
+if (userDoc?.role !== "admin") {
+  return (
+    <View className="flex-1 items-center justify-center bg-white">
+      <Text className="text-lg font-bold text-red-600">
+        Access Denied
+      </Text>
+      <Text className="text-sm text-slate-500 mt-2">
+        You do not have permission to view reports.
+      </Text>
+    </View>
+  );
+}
 
   /* ------------------------------------------------------------------ */
   /* UI */
   /* ------------------------------------------------------------------ */
   return (
+
     <ScrollView
       className="flex-1 bg-slate-300"
       contentContainerStyle={{ padding: 16 }}
@@ -264,9 +308,9 @@ const [reportType, setReportType] = useState<"student" | "staff">("student");
 
       {/* -------------------- PREVIEW SUMMARY -------------------- */}
      <View className="mt-6 p-4 bg-white rounded-xl shadow-sm">
-  <Text className="text-sm font-semibold text-slate-700">
-    Last 5 school days (preview)
-  </Text>
+ <Text className="text-sm font-semibold text-slate-700">
+  {previewLabel}
+</Text>
 
   <View className="mt-3 flex-row justify-between">
     <View>

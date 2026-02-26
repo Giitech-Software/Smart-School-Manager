@@ -10,7 +10,18 @@ import { db } from "../../app/firebase";
 import { recordAttendanceCore } from "./attendanceCore";
 import type { AttendanceRecord } from "./types";
 import { todayISO } from "./attendance";
+import { getAttendanceSettings } from "./attendanceSettings";
 
+
+function isLate(checkInIso: string, lateAfter: string): boolean {
+  const checkIn = new Date(checkInIso);
+  const [h, m] = lateAfter.split(":").map(Number);
+
+  const lateTime = new Date(checkIn);
+  lateTime.setHours(h, m, 0, 0);
+
+  return checkIn > lateTime;
+}
 /**
  * Find staff attendance for a given date
  */
@@ -54,23 +65,32 @@ export async function registerStaffAttendance({
 
   /* ===============================
      CHECK-IN
-  =============================== */
-  if (mode === "in") {
-    if (existing?.checkInTime) {
-      throw new Error("Staff already checked-in today.");
-    }
-
-    return await recordAttendanceCore({
-      record: {
-        subjectType: "staff",
-        subjectId: staffId,
-        date,
-        type: "in",
-        biometric,
-        method,
-      },
-    });
+  =============================== */if (mode === "in") {
+  if (existing?.checkInTime) {
+    throw new Error("Staff already checked-in today.");
   }
+
+  const settings = await getAttendanceSettings();
+  const now = new Date().toISOString();
+
+  let status: "present" | "late" = "present";
+
+  if (settings?.lateAfter) {
+    status = isLate(now, settings.lateAfter) ? "late" : "present";
+  }
+
+  return await recordAttendanceCore({
+    record: {
+      subjectType: "staff",
+      subjectId: staffId,
+      date,
+      type: "in",
+      biometric,
+      method,
+      status, // ✅ THIS is what was missing
+    },
+  });
+}
 
   /* ===============================
      CHECK-OUT

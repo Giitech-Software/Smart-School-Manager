@@ -439,7 +439,7 @@ export default function CheckinScreen() {
             <Text className="mt-1 text-neutral text-base">{`${confirmation.name}`}</Text>
             <Text className="text-xs text-neutral/60 mt-1">{`${confirmation.time}`}</Text>
           </View>
-        </View>
+        </View>      
       ) : null}
     </View>
   );

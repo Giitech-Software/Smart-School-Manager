@@ -16,7 +16,7 @@ import {
   getAttendanceSettings,
   saveAttendanceSettings,
 } from "../../src/services/attendanceSettings"; 
-import { autoMarkAbsentAllClasses } from "../../src/services/autoMarkAbsent";
+import { autoMarkAbsentAllClasses, autoMarkAbsentStaff } from "../../src/services/autoMarkAbsent";
 import { MaterialIcons } from "@expo/vector-icons";
 
 /* =========================
@@ -35,6 +35,7 @@ function formatTo12Hour(time24: string) {
 
   return `${hour}:${minute} ${ampm}`;
 }
+
 /* =========================
    ✅ ADDITION END
 ========================= */
@@ -56,31 +57,15 @@ export default function AttendanceSettingsAdmin() {
      AUTH GUARD
   --------------------------- */
   useEffect(() => {
-    if (userDocLoading) return;
+  if (userDocLoading || !userDoc || !isAdmin) return;
 
-    if (!userDoc) {
-      router.replace("/login");
-      return;
-    }
-
-    if (!isAdmin) {
-      Alert.alert("Access denied", "Admins only");
-      router.replace("/");
-    }
-  }, [userDoc, userDocLoading, isAdmin]);
-
-  /* ---------------------------
-     AUTO-MARK ABSENT
-  --------------------------- */
-  useEffect(() => {
-    if (userDocLoading || !userDoc || !isAdmin) return;
-
-    autoMarkAbsentAllClasses({
-      adminUid: userDoc.id,
-    }).catch((err) => {
-      console.error("Auto-mark absent failed", err);
-    });
-  }, [userDoc, userDocLoading, isAdmin]);
+  Promise.all([
+    autoMarkAbsentAllClasses({ adminUid: userDoc.id }),
+    autoMarkAbsentStaff({ adminUid: userDoc.id }),
+  ]).catch((err) => {
+    console.error("Auto-mark absent failed", err);
+  });
+}, [userDoc, userDocLoading, isAdmin]);
 
   /* ---------------------------
      LOAD SETTINGS
@@ -175,7 +160,7 @@ export default function AttendanceSettingsAdmin() {
             Late Check-In Time
           </Text>
           <Text className="text-slate-600 text-sm mb-3">
-            Students checking in after this time will be marked as late.
+            Checking in after this time will be marked as late.
           </Text>
 
           <TextInput
@@ -234,6 +219,8 @@ export default function AttendanceSettingsAdmin() {
             className="border rounded-xl p-3 text-lg"
           />
         </View>
+
+
 
         {/* Save */}
         <Pressable

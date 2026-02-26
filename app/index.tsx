@@ -17,10 +17,10 @@ import { auth as firebaseAuth } from "./firebase";
 import { signOutUser } from "../src/services/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons, Entypo } from "@expo/vector-icons";
-import useCurrentUser from "../src/hooks/useCurrentUser";
+import useCurrentUser from "../src/hooks/useCurrentUser";  
 import { getAttendanceSettings } from "../src/services/attendanceSettings";
-import { autoMarkAbsentsForToday } from "../src/services/attendance"; // adjust path if needed
-
+//import { autoMarkAbsentsForToday } from "../src/services/attendance"; // adjust path if needed
+import { autoMarkAbsentsForToday } from "../src/services/autoMarkAbsent";
 /* ---------- helpers ---------- */
 
 function shortName(email?: string | null) {
@@ -49,10 +49,11 @@ export default function Home(): JSX.Element {
   const { userDoc, loading: userDocLoading } = useCurrentUser();
   const [showWelcome, setShowWelcome] = useState(true);
 
-  const [autoMarking, setAutoMarking] = useState(false);
+  
 const [showStartOptions, setShowStartOptions] = useState(false);
 const [showReportOptions, setShowReportOptions] = useState(false);
 const [loadingReports, setLoadingReports] = useState(false);
+const [actor, setActor] = useState<"student" | "staff">("student");
   // Step 2 — attendance settings state
  const [attendanceSettings, setAttendanceSettings] = useState<{
   lateAfter?: string;
@@ -60,6 +61,13 @@ const [loadingReports, setLoadingReports] = useState(false);
   timezone?: string;
 }>({});
 
+const mounted = React.useRef(true);
+
+useEffect(() => {
+  return () => {
+    mounted.current = false;
+  };
+}, []);
 
   useEffect(() => {
     const unsub = onAuthStateChanged(firebaseAuth, (u) => {
@@ -68,6 +76,26 @@ const [loadingReports, setLoadingReports] = useState(false);
     });
     return () => unsub();
   }, [router]);
+
+useFocusEffect(
+  React.useCallback(() => {
+    let active = true;
+
+    (async () => {
+      try {
+        if (active && userDoc?.role === "admin") {
+          await autoMarkAbsentsForToday();
+        }
+      } catch (e) {
+        console.warn("Auto-mark failed", e);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [userDoc?.role])
+);
 
   // Step 3 — load attendance settings
  useFocusEffect(
@@ -132,7 +160,7 @@ const [loadingReports, setLoadingReports] = useState(false);
     </View>
   </View>
 
-  {/* Action row */}
+ 
   {/* Action row */}
 <View className="mt-4 flex-row items-center justify-between">
   <View className="flex-row items-center space-x-3">
@@ -166,7 +194,7 @@ const [loadingReports, setLoadingReports] = useState(false);
   className="bg-yellow-400 px-4 py-2 rounded-full"
 >
   <Text className="text-blue-900 font-bold">
-    Start Attendance
+    Start
   </Text>
 </Pressable>
 
@@ -307,38 +335,27 @@ const [loadingReports, setLoadingReports] = useState(false);
 </Link>
 
         
-         <Pressable
-  className="bg-white rounded-2xl p-4 shadow flex-row items-center"
-  onPress={async () => {
-    try {
-      setAutoMarking(true);                  // show spinner
-      await autoMarkAbsentsForToday();       // run auto-mark
-      router.push("/reports");               // navigate AFTER marking
-    } catch (err) {
-      console.error("Auto-mark failed", err);
-      Alert.alert("Error", "Failed to auto-mark absents. Please try again.");
-    } finally {
-      setAutoMarking(false);                 // hide spinner
-    }
-  }}
->
-  <View className="p-3 rounded-lg bg-secondary/10 mr-3">
-    <MaterialIcons name="bar-chart" size={22} color="#FACC15" />
-  </View>
-  <View>
-    <Text className="font-semibold text-dark">Reports</Text>
-    <Text className="text-sm text-neutral mt-1">
-      Daily • Weekly • Monthly • Termly
-    </Text>
-  </View>
-  {autoMarking && (
-    <ActivityIndicator
-      size="small"
-      color="#2563EB"
-      style={{ marginLeft: 8 }}
-    />
-  )}
-</Pressable>
+        {isAdmin && (
+  <Pressable
+    className="bg-white rounded-2xl p-4 shadow flex-row items-center"
+    onPress={() =>
+  router.push({
+    pathname: "/reports",
+    params: { type: actor },
+  })
+}
+  >
+    <View className="p-3 rounded-lg bg-secondary/10 mr-3">
+      <MaterialIcons name="bar-chart" size={22} color="#FACC15" />
+    </View>
+    <View>
+      <Text className="font-semibold text-dark">Reports</Text>
+      <Text className="text-sm text-neutral mt-1">
+        Daily • Weekly • Monthly • Termly
+      </Text>
+    </View>
+  </Pressable>
+)}
 
 
           {isAdmin ? (
@@ -378,8 +395,45 @@ const [loadingReports, setLoadingReports] = useState(false);
               </Text>
             </View>
           </Pressable>
-        </View>
+        </View><View className="mt-6 bg-white rounded-2xl p-4 shadow">
+  {/* Card title */}
+  <Text className="font-semibold text-dark mb-3 text-lg">
+    Select Actor
+  </Text>
 
+  {/* Buttons */}
+  <View className="flex-row space-x-3">
+    <Pressable
+     onPress={() => setActor("student")}
+      className={`flex-1 py-3 rounded-xl items-center justify-center border border-slate-200 ${
+        actor === "student" ? "bg-primary" : "bg-white"
+      }`}
+    >
+      <Text
+        className={`font-semibold ${
+          actor === "student" ? "text-white" : "text-dark"
+        }`}
+      >
+        Students
+      </Text>
+    </Pressable>
+
+    <Pressable
+     onPress={() => setActor("staff")}
+      className={`flex-1 py-3 rounded-xl items-center justify-center border border-slate-200 ${
+        actor === "staff" ? "bg-primary" : "bg-white"
+      }`}
+    >
+      <Text
+        className={`font-semibold ${
+          actor === "staff" ? "text-white" : "text-dark"
+        }`}
+      >
+        Staff
+      </Text>
+    </Pressable>
+  </View>
+</View>
         {/* Quick Actions */}
         <View className="mt-6 bg-white rounded-2xl p-4 shadow">
           <View className="flex-row items-center justify-between mb-3">
@@ -389,14 +443,18 @@ const [loadingReports, setLoadingReports] = useState(false);
 
           <View className="space-y-3">
             <Pressable
-              onPress={() => router.push("/attendance/checkin")}
+              onPress={() =>
+  router.push({
+    pathname: "/attendance/checkin",
+    params: { actor },
+  })
+}
               className="p-3 rounded-lg bg-primary/5 flex-row items-center justify-between"
             >
               <View className="flex-row items-center">
                 <MaterialIcons name="login" size={18} color="#1E3A8A" />
                 <Text className="ml-3 text-dark">
-                  Start class check-in
-                </Text>
+                 {actor === "student" ? "Start class check-in" : "Start staff check-in"}   </Text>
               </View>
              <Text className="text-sm text-neutral">
   • {formatTime(attendanceSettings.lateAfter)}
@@ -412,7 +470,7 @@ const [loadingReports, setLoadingReports] = useState(false);
               <View className="flex-row items-center">
                 <MaterialIcons name="logout" size={18} color="#EF4444" />
                 <Text className="ml-3 text-dark">
-                  End of day check-out
+               {actor === "student" ? "End of class check-out" : "End of staff check-out"}
                 </Text>
               </View>
              <Text className="text-sm text-neutral">
@@ -421,19 +479,28 @@ const [loadingReports, setLoadingReports] = useState(false);
 </Text> 
     </Pressable>
 
-            <Pressable
-              onPress={() => router.push("/reports")}
-              className="p-3 rounded-lg border border-slate-100 flex-row items-center justify-between"
-            >
-              <View className="flex-row items-center">
-                <MaterialIcons name="insights" size={18} color="#0F172A" />
-                <Text className="ml-3 text-dark">
-                  View weekly report
-                </Text>
-              </View>
-              <Text className="text-sm text-neutral">• 5 days</Text>
-            </Pressable>
-          </View>
+{isAdmin && (
+  <Pressable
+    onPress={() =>
+      router.push({
+        pathname: "/reports",
+        params: { type: actor }, // 🔥 PASS ACTOR
+      })
+    }
+    className="p-3 rounded-lg border border-slate-100 flex-row items-center justify-between"
+  >
+    <View className="flex-row items-center">
+      <MaterialIcons name="insights" size={18} color="#0F172A" />
+      <Text className="ml-3 text-dark">
+        View weekly report
+      </Text>
+    </View>
+    <Text className="text-sm text-neutral">
+      • {actor === "student" ? 5 : 30} days
+    </Text>
+  </Pressable>
+)}
+</View>
         </View>
 
         {/* Sign out */}
