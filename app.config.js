@@ -26,21 +26,27 @@ export default ({ config }) => ({
   icon: "./assets/images/icon.png",
 
   ios: {
-    supportsTablet: true,
-    bundleIdentifier: "com.giitechsoftwaresystems.mobile",
-    infoPlist: {
-      ITSAppUsesNonExemptEncryption: false,
-      NSCameraUsageDescription:
-        "Camera access is required for face attendance",
-    },
+  supportsTablet: true,
+  bundleIdentifier: "com.giitechsoftwaresystems.mobile",
+  infoPlist: {
+    ITSAppUsesNonExemptEncryption: false,
+    NSCameraUsageDescription:
+      "Camera access is required for face attendance",
+    NSLocationWhenInUseUsageDescription:
+      "Location is required to verify school attendance inside campus.",
   },
+},
 
   android: {
     package: "com.giitech_software_systems.mobile",
     edgeToEdgeEnabled: true,
     predictiveBackGestureEnabled: false,
     softwareKeyboardLayoutMode: "resize",
-    permissions: ["CAMERA"],
+   permissions: [
+  "CAMERA",
+  "ACCESS_FINE_LOCATION",
+  "ACCESS_COARSE_LOCATION"
+],
     adaptiveIcon: {
       foregroundImage: "./assets/images/adaptive-icon-foreground.png",
       backgroundColor: "#0A4FB3",
@@ -51,6 +57,7 @@ export default ({ config }) => ({
     "expo-web-browser",
     "expo-router",
      "@react-native-community/datetimepicker",
+     "expo-location",
 
     /*[
       "react-native-vision-camera",

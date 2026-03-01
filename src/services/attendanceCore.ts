@@ -9,7 +9,7 @@ import {
 } from "firebase/firestore";
 import { db } from "../../app/firebase";
 import type { AttendanceRecord } from "./types";
-
+import { validateSchoolLocation } from "./locationGuard";
 /**
  * Supported attendance subjects
  */
@@ -35,6 +35,8 @@ export async function recordAttendanceCore({
     biometric?: boolean;
   };
 }): Promise<AttendanceRecord> {
+  // 🔒 SECURITY: Validate user location before recording attendance
+await validateSchoolLocation();
   const now = new Date().toISOString();
   const attendanceCollection = collection(db, collectionName);
 

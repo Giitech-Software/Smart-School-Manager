@@ -261,7 +261,26 @@ return (
   <View className="p-4 space-y-4">
     {/* ================= INFINITE MOTION TEXT ================= */}
     <InfiniteMarquee />
-
+{/* ✅ NEW: Set School Location */}
+<Pressable
+  onPress={() => router.push("/admin/setup-school-location")}
+  className="rounded-2xl p-4 shadow flex-row items-center justify-between bg-yellow-200"
+>
+  <View className="flex-row items-center space-x-3">
+    <View className="p-2 rounded-full bg-white/60">
+      <MaterialIcons name="location-on" size={20} color="#1E293B" />
+    </View>
+    <View>
+      <Text className="font-semibold text-yellow-800">
+        Set School/Work Location
+      </Text>
+      <Text className="text-sm text-neutral mt-1">
+        Define the geofence for attendance (GPS)
+      </Text>
+    </View>
+  </View>
+  <MaterialIcons name="chevron-right" size={20} color="#64748B" />
+</Pressable>
     {/* ================= QUICK SETUP ================= */}
     <Text className="text-lg font-semibold">Quick setup</Text>
 
