@@ -83,6 +83,7 @@ export interface Staff {
   fingerprintId?: string;
     faceImageUrl?: string;
     faceId?: string;   // ✅ ADD THIS
+    faceEnrolled?: boolean;
   createdAt?: any;
   updatedAt?: any;
 }

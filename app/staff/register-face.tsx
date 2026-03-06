@@ -1,5 +1,4 @@
 // app/staff/register-face.tsx
-
 import React, { useRef, useState } from "react";
 import {
   View,
@@ -14,6 +13,7 @@ import {
 } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { indexFace } from "../../src/services/faceService";
+import { getStaffById, upsertStaff } from "../../src/services/staff";
 
 export default function RegisterFace() {
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
@@ -41,7 +41,7 @@ export default function RegisterFace() {
 
       const photo = await cameraRef.current.takePictureAsync({
         base64: true,
-        quality: 0.6, // balanced quality
+        quality: 0.6,
         skipProcessing: true,
       });
 
@@ -50,12 +50,27 @@ export default function RegisterFace() {
         return;
       }
 
+      // Index the face
       const result = await indexFace(staffId, photo.base64);
 
       if (!result.success) {
         Alert.alert("Error", "Face indexing failed");
         return;
       }
+
+      // ✅ Fetch full staff object first
+      const staff = await getStaffById(staffId);
+      if (!staff) {
+        Alert.alert("Error", "Staff not found");
+        return;
+      }
+
+      // ✅ Upsert staff with updated face info
+      await upsertStaff({
+        ...staff,
+        faceImageUrl: photo.base64,
+        faceEnrolled: true,
+      });
 
       Alert.alert("Success", "Face registered successfully");
 

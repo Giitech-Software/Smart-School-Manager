@@ -1,11 +1,10 @@
 // mobile/app/staff/index.tsx
 import React, { useState } from "react";
 import { View, Text, FlatList, Pressable, Alert, ActivityIndicator } from "react-native";
-import { useRouter, useFocusEffect, Link } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { listStaff, deleteStaff } from "../../src/services/staff";
 import type { Staff } from "../../src/services/types";
 import { MaterialIcons } from "@expo/vector-icons";
-
 
 export default function StaffList() {
   const router = useRouter();
@@ -20,7 +19,9 @@ export default function StaffList() {
         if (!active) return;
         await loadStaff();
       })();
-      return () => { active = false; };
+      return () => {
+        active = false;
+      };
     }, [])
   );
 
@@ -40,7 +41,7 @@ export default function StaffList() {
   async function handleDelete(id: string, name?: string) {
     Alert.alert(
       "⚠️ Confirm Delete",
-      `Are you sure you want to delete "${name ?? 'this staff'}"?`,
+      `Are you sure you want to delete "${name ?? "this staff"}"?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -73,100 +74,134 @@ export default function StaffList() {
 
   return (
     <View className="flex-1 bg-slate-300 p-4">
-     <View className="flex-row items-center justify-between mb-4">
-  {/* Left: Back + Title */}
-  <View className="flex-row items-center">
-    <Pressable
-      onPress={() => router.back()}
-      className="p-1 mr-2"
-      hitSlop={8}
-    >
-      <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
-    </Pressable>
+      {/* Header */}
+      <View className="flex-row items-center justify-between mb-4">
+        <View className="flex-row items-center">
+          <Pressable onPress={() => router.back()} className="p-1 mr-2" hitSlop={8}>
+            <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
+          </Pressable>
+          <Text className="text-2xl font-extrabold text-slate-900">Staff</Text>
+        </View>
 
-    <Text className="text-2xl font-extrabold text-slate-900">
-      Staff
-    </Text>
-  </View>
+        <Pressable
+          onPress={() => router.push("/staff/create")}
+          className="bg-primary py-2 px-3 rounded-xl"
+        >
+          <Text className="text-white font-medium">Add</Text>
+        </Pressable>
+      </View>
 
-  {/* Right: Add Button */}
-  <Pressable
-    onPress={() => router.push("/staff/create")}
-    className="bg-primary py-2 px-3 rounded-xl"
-  >
-    <Text className="text-white font-medium">Add</Text>
-  </Pressable>
-</View>
-
-
+      {/* Staff List */}
       <FlatList
         data={staffList}
         keyExtractor={(item) => item.id!}
-        renderItem={({ item }) => (
-          <View className="bg-white rounded-2xl p-4 mb-3 flex-row items-center justify-between">
-            <View>
-              <Text className="font-semibold text-dark">{item.name}</Text>
-              <Text className="text-sm text-neutral">{item.staffId}</Text>
-              <Text className="text-xs mt-1">
-                {item.fingerprintId ? "Biometric enrolled ✅" : "Biometric not enrolled ❌"}
-              </Text>
+        renderItem={({ item }) => {
+          // Biometric status
+          const face = !!item.faceEnrolled;
+          const fingerprint = !!item.fingerprintId;
+
+          // Card color based on enrollment
+          let cardColor = "#fee2e2"; // red
+          let borderColor = "#ef4444";
+
+          if (face && fingerprint) {
+            cardColor = "#dcfce7"; // green
+            borderColor = "#16a34a";
+          } else if (face || fingerprint) {
+            cardColor = "#fef9c3"; // yellow
+            borderColor = "#ca8a04";
+          }
+
+          return (
+            <View
+              className="rounded-2xl p-4 mb-3 flex-row items-center justify-between"
+              style={{
+                backgroundColor: cardColor,
+                borderWidth: 1,
+                borderColor: borderColor,
+              }}
+            >
+              {/* Staff Info */}
+              <View>
+                <Text className="font-semibold text-dark text-base">🧑 {item.name}</Text>
+                <Text className="text-sm text-neutral">ID: {item.staffId}</Text>
+
+                {/* Biometric Status */}
+                <View className="flex-row mt-2 space-x-4">
+                  {/* Face */}
+                  <View className="flex-row items-center">
+                    <MaterialIcons
+                      name="face"
+                      size={18}
+                      color={face ? "#16A34A" : "#9CA3AF"}
+                    />
+                    <Text className="ml-1 text-xs">Face</Text>
+                  </View>
+
+                  {/* Fingerprint */}
+                  <View className="flex-row items-center">
+                    <MaterialIcons
+                      name="fingerprint"
+                      size={18}
+                      color={fingerprint ? "#2563EB" : "#9CA3AF"}
+                    />
+                    <Text className="ml-1 text-xs">Fingerprint</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Actions */}
+              <View className="flex-row items-center space-x-2">
+                {/* Edit */}
+                <Pressable
+                  onPress={() =>
+                    router.push({
+                      pathname: "/staff/[id]",
+                      params: { id: item.id! },
+                    })
+                  }
+                  className="p-2"
+                >
+                  <MaterialIcons name="edit" size={20} color="#1E3A8A" />
+                </Pressable>
+
+                {/* Delete */}
+                <Pressable
+                  onPress={() => handleDelete(item.id!, item.name)}
+                  className="p-2"
+                >
+                  <MaterialIcons name="delete" size={20} color="#EF4444" />
+                </Pressable>
+
+                {/* Face Enroll / Update */}
+                <Pressable
+                  onPress={() =>
+                    router.push(`/staff/register-face?staffId=${item.id}`)
+                  }
+                  className="p-2"
+                >
+                  <MaterialIcons
+                    name="face-retouching-natural"
+                    size={20}
+                    color="#9333EA"
+                  />
+                </Pressable>
+
+                {/* Fingerprint Enroll */}
+                {!fingerprint && (
+                  <Pressable
+                    onPress={() =>
+                      router.push(`/staff/enroll-biometric?id=${item.id}`)
+                    }
+                    className="p-2"
+                  >
+                    <MaterialIcons name="fingerprint" size={20} color="#2563EB" />
+                  </Pressable>
+                )}
+              </View>
             </View>
-
-            <View className="flex-row items-center space-x-2">
-              {/* Edit */}
-            <Pressable
- onPress={() =>
-  router.push({
-    pathname: "/staff/[id]", 
-    params: { id: item.id! },
-  })
-}
-  className="p-2 rounded bg-white/20"
->
-  <MaterialIcons name="edit" size={20} color="#1E3A8A" />
-</Pressable>
-
-
-              {/* Delete */}
-              <Pressable
-                onPress={() => handleDelete(item.id!, item.name)}
-                className="p-2 rounded bg-white/20"
-              >
-                <MaterialIcons name="delete" size={20} color="#EF4444" />
-              </Pressable>
-
-              {/* Enroll Biometric */}
-             {/* Biometric / Face Actions */}
-<View className="flex-col space-y-1">
-
-  {!item.fingerprintId && (
-    <Pressable
-      onPress={() => router.push(`/staff/enroll-biometric?id=${item.id}`)}
-      className="px-2 py-1 rounded bg-blue-500"
-    >
-      <Text className="text-white text-xs">Enroll Fingerprint</Text>
-    </Pressable>
-  )}
-
-  {item.faceImageUrl ? (
-    <Text className="text-green-600 text-xs">
-      Face Enrolled ✅
-    </Text>
-  ) : (
-    <Pressable
-      onPress={() =>
-        router.push(`/staff/register-face?staffId=${item.id}`)
-      }
-      className="px-2 py-1 rounded bg-purple-600"
-    >
-      <Text className="text-white text-xs">Register Face</Text>
-    </Pressable>
-  )}
-
-</View>
-            </View>
-          </View>
-        )}
+          );
+        }}
         ListEmptyComponent={
           <Text className="text-center text-neutral mt-8">No staff found.</Text>
         }
