@@ -136,14 +136,34 @@ export default function StaffList() {
               </Pressable>
 
               {/* Enroll Biometric */}
-              {!item.fingerprintId && (
-                <Pressable
-                  onPress={() => router.push(`/staff/enroll-biometric?id=${item.id}`)}
-                  className="px-2 py-1 rounded bg-blue-500"
-                >
-                  <Text className="text-white text-xs">Enroll</Text>
-                </Pressable>
-              )}
+             {/* Biometric / Face Actions */}
+<View className="flex-col space-y-1">
+
+  {!item.fingerprintId && (
+    <Pressable
+      onPress={() => router.push(`/staff/enroll-biometric?id=${item.id}`)}
+      className="px-2 py-1 rounded bg-blue-500"
+    >
+      <Text className="text-white text-xs">Enroll Fingerprint</Text>
+    </Pressable>
+  )}
+
+  {item.faceImageUrl ? (
+    <Text className="text-green-600 text-xs">
+      Face Enrolled ✅
+    </Text>
+  ) : (
+    <Pressable
+      onPress={() =>
+        router.push(`/staff/register-face?staffId=${item.id}`)
+      }
+      className="px-2 py-1 rounded bg-purple-600"
+    >
+      <Text className="text-white text-xs">Register Face</Text>
+    </Pressable>
+  )}
+
+</View>
             </View>
           </View>
         )}

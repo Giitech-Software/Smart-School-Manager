@@ -108,13 +108,33 @@ export default function StaffDetail() {
         </Pressable>
 
         {!staff.fingerprintId && (
-          <Pressable
-            onPress={() => router.push(`/staff/enroll-biometric?id=${staff.id}`)}
-            className="bg-blue-500 py-3 px-4 rounded-xl mt-4"
-          >
-            <Text className="text-white text-center font-medium">Enroll Biometric</Text>
-          </Pressable>
-        )}
+  <>
+    {/* Fingerprint */}
+    <Pressable
+      onPress={() => router.push(`/staff/enroll-biometric?id=${staff.id}`)}
+      className="bg-blue-500 py-3 px-4 rounded-xl mt-4"
+    >
+      <Text className="text-white text-center font-medium">
+        Enroll Biometric
+      </Text>
+    </Pressable>
+
+    {/* Face */}
+    <Pressable
+      onPress={() =>
+        router.push({
+          pathname: "/staff/register-face",
+          params: { staffId: staff.id },
+        })
+      }
+      className="bg-green-600 py-3 px-4 rounded-xl mt-4"
+    >
+      <Text className="text-white text-center font-medium">
+        Register Face
+      </Text>
+    </Pressable>
+  </>
+)}
       </View>
     </KeyboardAwareScreen>
   );

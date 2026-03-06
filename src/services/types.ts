@@ -81,6 +81,8 @@ export interface Staff {
   email: string;
   role?: string;        // teacher, admin, non-teaching, etc
   fingerprintId?: string;
+    faceImageUrl?: string;
+    faceId?: string;   // ✅ ADD THIS
   createdAt?: any;
   updatedAt?: any;
 }

@@ -6,6 +6,8 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 // @ts-ignore: getReactNativePersistence exists at runtime, TS definitions are missing
 import { initializeAuth, getReactNativePersistence, getAuth, type Auth } from 'firebase/auth';
+import { getStorage } from "firebase/storage";
+
 
 console.log("EXPO EXTRA LOADED → ", Constants.expoConfig?.extra);
 
@@ -53,3 +55,4 @@ try {
 
 export const auth = authInstance;
 export default app;
+export const storage = getStorage(app);

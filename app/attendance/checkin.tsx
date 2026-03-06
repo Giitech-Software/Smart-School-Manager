@@ -342,6 +342,30 @@ export default function CheckinScreen() {
           <MaterialIcons name="arrow-forward-ios" size={16} color="#64748B" />
         </Pressable>
 
+
+{/* Face Check-In */}
+<Pressable
+  onPress={() =>
+    router.push({
+      pathname: "/staff/face-checkin",
+      params: { mode: "in" },
+    })
+  }
+  className="bg-white rounded-2xl p-5 shadow flex-row items-center mb-5"
+>
+  <View className="p-4 bg-indigo-100 rounded-xl mr-4">
+    <MaterialCommunityIcons name="face-man-profile" size={28} color="#4F46E5" />
+  </View>
+  <View className="flex-1">
+    <Text className="text-lg font-semibold text-dark">
+      Staff Face Check-In
+    </Text>
+    <Text className="text-sm text-neutral mt-1">
+      Record attendance using facial recognition.
+    </Text>
+  </View>
+  <MaterialIcons name="arrow-forward-ios" size={16} color="#64748B" />
+</Pressable>
         {!showBiometric ? (
           <View className="mt-4 bg-white rounded-2xl p-4 shadow">
             <Text className="font-semibold text-dark text-base mb-2">How it works</Text>

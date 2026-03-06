@@ -149,9 +149,7 @@ export default function AttendanceSettingsAdmin() {
             />
           </Pressable>
 
-          <Text className="text-2xl font-extrabold text-slate-900">
-            Attendance Settings
-          </Text>
+          <Text className="text-2xl font-extrabold text-slate-900">          </Text>
         </View>
 
         {/* Late time */}
