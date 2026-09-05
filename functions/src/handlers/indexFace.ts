@@ -20,12 +20,16 @@ const rekognition = new AWS.Rekognition({
   region,
 });
 
-export const indexFaceHandler = async (req: Request, res: Response) => {
+export const indexFaceHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { staffId, imageBase64 } = req.body;
 
     if (!staffId || !imageBase64) {
-      return res.status(400).json({ error: "staffId and imageBase64 required" });
+      res.status(400).json({ error: "staffId and imageBase64 required" });
+      return;
     }
 
     // Convert base64 → Buffer
@@ -42,7 +46,8 @@ export const indexFaceHandler = async (req: Request, res: Response) => {
       .promise();
 
     if (!result.FaceRecords || result.FaceRecords.length === 0) {
-      return res.status(400).json({ success: false, message: "No face detected" });
+      res.status(400).json({ success: false, message: "No face detected" });
+      return;
     }
 
     // Save faceId to Firestore
@@ -52,9 +57,11 @@ export const indexFaceHandler = async (req: Request, res: Response) => {
       { merge: true }
     );
 
-    return res.json({ success: true, faceId });
+    res.json({ success: true, faceId });
+    return;
   } catch (error: any) {
     console.error("indexFace error:", error);
-    return res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message });
+    return;
   }
 };

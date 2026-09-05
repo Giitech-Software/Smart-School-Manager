@@ -20,12 +20,16 @@ const rekognition = new AWS.Rekognition({
   region,
 });
 
-export const recognizeFaceHandler = async (req: Request, res: Response) => {
+export const recognizeFaceHandler = async (
+  req: Request,
+  res: Response
+): Promise<void> => {
   try {
     const { imageBase64 } = req.body;
 
     if (!imageBase64) {
-      return res.status(400).json({ error: "imageBase64 required" });
+      res.status(400).json({ error: "imageBase64 required" });
+      return;
     }
 
     const imageBuffer = Buffer.from(imageBase64, "base64");
@@ -41,7 +45,8 @@ export const recognizeFaceHandler = async (req: Request, res: Response) => {
       .promise();
 
     if (!result.FaceMatches || result.FaceMatches.length === 0) {
-      return res.json({ matched: false, similarity: 0 });
+      res.json({ matched: false, similarity: 0 });
+      return;
     }
 
     const match = result.FaceMatches[0];
@@ -62,9 +67,11 @@ export const recognizeFaceHandler = async (req: Request, res: Response) => {
       );
     }
 
-    return res.json({ matched: true, staffId, similarity });
+    res.json({ matched: true, staffId, similarity });
+    return;
   } catch (error: any) {
     console.error("recognizeFace error:", error);
-    return res.status(500).json({ error: error.message });
+    res.status(500).json({ error: error.message });
+    return;
   }
 };

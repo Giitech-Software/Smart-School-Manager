@@ -3,7 +3,6 @@ import React, { JSX, useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   Alert,
   ActivityIndicator,
@@ -17,16 +16,15 @@ import {
   sendEmailVerificationToCurrentUser,
 } from "../../src/services/auth";
 import { upsertUser } from "../../src/services/users"; // optional, keep if you have it
+import { getTenantInviteByCode, normalizeInviteCode, type TenantInvite } from "../../src/services/tenants";
 import { updateProfile } from "firebase/auth"; // optional to update Firebase Auth displayName
-import { USER_ROLES, type UserRole } from "../../src/services/constants/roles";
+import { type UserRole } from "../../src/services/constants/roles";
 
 import { Picker } from "@react-native-picker/picker";
 
 import AppPicker from "@/components/AppPicker";
 import AppInput from "@/components/AppInput";
-
-import { createStaffFromUser } from "../../src/services/staff";
-
+import { getFriendlyAuthErrorMessage } from "@/src/utils/friendlyError";
 
 function isValidEmail(email: string) {
   return /\S+@\S+\.\S+/.test(email);
@@ -39,6 +37,7 @@ export default function Signup(): JSX.Element {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 const [role, setRole] = useState<UserRole>("teacher"); // default is safe
@@ -65,6 +64,17 @@ const [role, setRole] = useState<UserRole>("teacher"); // default is safe
 
     setLoading(true);
     try {
+      const normalizedInviteCode = normalizeInviteCode(inviteCode);
+      let tenantInvite: TenantInvite | null = null;
+
+      if (normalizedInviteCode) {
+        tenantInvite = await getTenantInviteByCode(normalizedInviteCode);
+        if (!tenantInvite) {
+          Alert.alert("Invalid invite", "Ask your administrator for the latest tenant invite code.");
+          return;
+        }
+      }
+
       const credential = await signUp(email.trim(), password);
 
       // Optional: update Firebase Auth displayName
@@ -76,15 +86,14 @@ const [role, setRole] = useState<UserRole>("teacher"); // default is safe
         console.warn("Failed to update Firebase Auth displayName:", e);
       }
 const safeRole: UserRole =
-  role === "admin" ? "teacher" : role;
+  role === "admin" || role === "super_admin" ? "teacher" : role;
 
       // Create Firestore user profile
      
-try {
-  if (typeof upsertUser === "function") {
-   await upsertUser({
+await upsertUser({
   id: credential.user.uid,
-  email: email.trim(),
+  uid: credential.user.uid,
+  email: email.trim().toLowerCase(),
   role: safeRole,                 // role is informational only
   displayName: fullName.trim(),
 
@@ -93,33 +102,15 @@ try {
   canTakeStaffAttendance: false,
   canTakeStudentAttendance: false,
 
+  ...(tenantInvite ? {
+    tenantId: tenantInvite.tenantId,
+    tenantName: tenantInvite.tenantName,
+    tenantType: tenantInvite.tenantType,
+    tenantInviteCode: tenantInvite.code,
+  } : {}),
+
   createdAt: new Date(),
 });
-
-  }
-} catch (e) {
-  console.warn("upsertUser failed:", e);
-}
-if (
-  safeRole === "teacher" ||
-  safeRole === "staff" ||
-  safeRole === "non_teaching_staff"
-) {
-  try {
-    await createStaffFromUser(
-      credential.user.uid,
-      fullName.trim(),
-      email.trim(),
-      safeRole
-    );
-
-    console.log("Staff document created automatically");
-  } catch (err) {
-    console.error("Failed to create staff document:", err);
-  }
-}
-
-
       try {
         await sendEmailVerificationToCurrentUser();
       } catch (e) {
@@ -128,17 +119,13 @@ if (
 
       router.replace("/(auth)/verify-email");
     } catch (err: any) {
-      const code = err?.code ?? "";
-      let message = err?.message ?? String(err);
-      if (code === "auth/email-already-in-use") {
-        message =
-          "That email is already in use. Try signing in or reset your password.";
-      } else if (code === "auth/invalid-email") {
-        message = "Invalid email address.";
-      } else if (code === "auth/weak-password") {
-        message = "Password is too weak.";
-      }
-      Alert.alert("Signup failed", message);
+      Alert.alert(
+        "Signup failed",
+        getFriendlyAuthErrorMessage(
+          err,
+          "Unable to create your account. Please try again."
+        )
+      );
     } finally {
       setLoading(false);
     }
@@ -197,6 +184,15 @@ if (
   className="border p-3 rounded-xl mb-3 bg-white"
 />
 
+
+          <Text className="text-m text-slate-600 mb-1">Tenant invite code</Text>
+          <AppInput
+  value={inviteCode}
+  onChangeText={(value) => setInviteCode(value.toUpperCase())}
+  placeholder="Optional"
+  autoCapitalize="characters"
+  className="border p-3 rounded-xl mb-3 bg-white"
+/>
 
           {/* Password */}
           <Text className="text-m text-slate-600 mb-1">Password</Text>
@@ -262,3 +258,4 @@ if (
     </KeyboardAvoidingView>
   );
 }
+

@@ -2,36 +2,43 @@
 
 import {
   collection,
-  addDoc,
   query,
   where,
   getDocs,
   setDoc,
   serverTimestamp,
-  orderBy,
-  updateDoc,
   doc,
 } from "firebase/firestore";
 import { db } from "../../app/firebase";
 import type { AttendanceRecord } from "./types";
-import { getAttendanceSettings } from "./attendanceSettings";
+import {
+  assertAttendanceCheckInOpen,
+  getAttendanceSettings,
+  hasReachedAttendanceCloseTime,
+} from "./attendanceSettings";
 import { recordAttendanceCore } from "./attendanceCore";
-
-
-
-// At the top of the file (below imports)
-function hasPassedClosingTime(closeAfter?: string) {
-  if (!closeAfter) return false;
-
-  const [h, m] = closeAfter.split(":").map(Number);
-  const now = new Date();
-  const closeTime = new Date();
-  closeTime.setHours(h, m, 0, 0);
-
-  return now >= closeTime;
-}
+import {
+  cleanMovementReason,
+  getMovementReasonRequirement,
+} from "./movementPolicy";
+import { getTenantScope, tenantConstraints, withTenantScope } from "./tenantScope";
 
 const attendanceCollection = collection(db, "attendance");
+const attendanceOperationLocks = new Map<string, Promise<unknown>>();
+
+async function withAttendanceOperationLock<T>(key: string, operation: () => Promise<T>): Promise<T> {
+  const previous = attendanceOperationLocks.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => current);
+  attendanceOperationLocks.set(key, tail);
+  await previous;
+  try { return await operation(); }
+  finally {
+    release();
+    if (attendanceOperationLocks.get(key) === tail) attendanceOperationLocks.delete(key);
+  }
+}
 
 /** Utility: today's date (YYYY-MM-DD) */
 export function todayISO() {
@@ -76,10 +83,12 @@ export async function recordAttendance(
   record: Partial<AttendanceRecord> & {
     studentId: string;
     classId: string;
+    classDocId?: string;
     type: "in" | "out";
     date: string;
     biometric?: boolean;
     method?: "qr" | "fingerprint" | "face" | "manual";
+    movementReason?: string | null;
   }
 ): Promise<AttendanceRecord> {
   const now = new Date().toISOString();
@@ -88,6 +97,10 @@ export async function recordAttendance(
      UPDATE EXISTING RECORD
   =============================== */
   if (record.id) {
+    if (record.type === "in") {
+      await assertAttendanceCheckInOpen();
+    }
+
     return normalizeAttendance(
       await recordAttendanceCore({
         record: {
@@ -107,6 +120,19 @@ export async function recordAttendance(
      CREATE NEW CHECK-IN
   =============================== */
   const settings = await getAttendanceSettings();
+  if (hasReachedAttendanceCloseTime(settings)) {
+    throw new Error("Attendance check-in is closed for today.");
+  }
+
+  const movementRequirement = getMovementReasonRequirement({
+    settings,
+    mode: "in",
+    now: new Date(now),
+  });
+  const movementReason = cleanMovementReason(record.movementReason);
+  if (movementRequirement && !movementReason) {
+    throw new Error("A movement book entry is required for this late arrival.");
+  }
 
   const status = isLate(now, settings.lateAfter)
     ? "late"
@@ -119,6 +145,12 @@ export async function recordAttendance(
         subjectType: "student",
         subjectId: record.studentId,
         status,
+        lateReason:
+          movementRequirement?.kind === "late" ? movementReason : null,
+        lateMinutes:
+          movementRequirement?.kind === "late"
+            ? movementRequirement.minutes
+            : null,
         type: "in",
       },
     })
@@ -131,14 +163,23 @@ export async function recordAttendance(
 export async function findAttendance(
   studentId: string,
   classId: string,
-  date: string
+  date: string,
+  classDocId?: string,
+  enforceClassAssignment = false
 ): Promise<AttendanceRecord | null> {
-  const q = query(
-    attendanceCollection,
+  const filters: any[] = [
     where("studentId", "==", studentId),
     where("classId", "==", classId),
-    where("date", "==", date)
-  );
+    where("date", "==", date),
+    ...tenantConstraints(await getTenantScope()),
+  ];
+
+  if (classDocId && enforceClassAssignment) {
+    filters.unshift(where("subjectType", "==", "student"));
+    filters.push(where("classDocId", "==", classDocId));
+  }
+
+  const q = query(attendanceCollection, ...filters);
 
   const snap = await getDocs(q);
   if (snap.empty) return null;
@@ -152,40 +193,76 @@ export async function findAttendance(
 /**
  * Unified attendance registration
  */
-export async function registerAttendanceUnified({
-  studentId,
-  classId,
-  mode,
-  biometric,
-  method = "qr",
-}: {
+export async function registerAttendanceUnified(args: {
   studentId: string;
   classId: string;
+  classDocId?: string;
   mode: "in" | "out";
   biometric?: boolean;
   method?: "qr" | "fingerprint" | "face" | "manual";
+  enforceClassAssignment?: boolean;
+  movementReason?: string | null;
+}): Promise<AttendanceRecord | void> {
+  return withAttendanceOperationLock(`${args.studentId}:${todayISO()}`, () => registerAttendanceUnifiedUnsafe(args));
+}
+
+async function registerAttendanceUnifiedUnsafe({
+  studentId,
+  classId,
+  classDocId,
+  mode,
+  biometric,
+  method = "qr",
+  enforceClassAssignment = false,
+  movementReason,
+}: {
+  studentId: string;
+  classId: string;
+  classDocId?: string;
+  mode: "in" | "out";
+  biometric?: boolean;
+  method?: "qr" | "fingerprint" | "face" | "manual";
+  enforceClassAssignment?: boolean;
+  movementReason?: string | null;
 }): Promise<AttendanceRecord | void> {
   const date = todayISO();
 
+  if (mode === "in") {
+    await assertAttendanceCheckInOpen();
+  }
+
   // 🔒 GLOBAL DAILY GUARD
-  const anyToday = await findAnyAttendanceForStudentOnDate(studentId, date);
+  const anyToday = await findAnyAttendanceForStudentOnDate(
+    studentId,
+    date,
+    classDocId,
+    enforceClassAssignment
+  );
   if (mode === "in" && anyToday) {
     throw new Error("Student already checked-in today. Please check-out first.");
   }
 
-  const existing = await findAttendance(studentId, classId, date);
-
-  if (!existing) {
-    if (mode === "in") {
-      return await recordAttendance({
-        studentId,
-        classId,
-        type: "in",
-        date,
-        biometric: biometric === true,
-        method, // ✅ tracked
-      });
-    }
+  const existing = await findAttendance(
+    studentId,
+    classId,
+    date,
+    classDocId,
+    enforceClassAssignment
+  );
+if (!existing) {
+  if (mode === "in") {
+    return await recordAttendance({
+      studentId,
+      classId,
+      classDocId,
+      type: "in",
+      date,
+      biometric: biometric === true,
+      method,
+      movementReason,
+    });
+  }
+      
     throw new Error("Student must check-in before checking-out.");
   }
 
@@ -200,13 +277,30 @@ export async function registerAttendanceUnified({
       throw new Error("Student already checked-out today.");
     }
 
+    const settings = await getAttendanceSettings();
+    const movementRequirement = getMovementReasonRequirement({
+      settings,
+      mode: "out",
+    });
+    const cleanedReason = cleanMovementReason(movementReason);
+    if (movementRequirement && !cleanedReason) {
+      throw new Error("A movement book entry is required for this early departure.");
+    }
+
     return await recordAttendance({
       id: rec.id,
       studentId,
       classId,
+      classDocId,
       date,
       type: "out",
       checkInTime: rec.checkInTime,
+      earlyCheckoutReason:
+        movementRequirement?.kind === "early_checkout" ? cleanedReason : null,
+      earlyCheckoutMinutes:
+        movementRequirement?.kind === "early_checkout"
+          ? movementRequirement.minutes
+          : null,
       biometric: biometric === true,
       method: rec.method, // ✅ PRESERVE ORIGINAL METHOD
     });
@@ -220,13 +314,22 @@ export async function registerAttendanceUnified({
  */
 async function findAnyAttendanceForStudentOnDate(
   studentId: string,
-  date: string
+  date: string,
+  classDocId?: string,
+  enforceClassAssignment = false
 ): Promise<AttendanceRecord | null> {
-  const q = query(
-    attendanceCollection,
+  const filters: any[] = [
     where("studentId", "==", studentId),
-    where("date", "==", date)
-  );
+    where("date", "==", date),
+    ...tenantConstraints(await getTenantScope()),
+  ];
+
+  if (classDocId && enforceClassAssignment) {
+    filters.unshift(where("subjectType", "==", "student"));
+    filters.push(where("classDocId", "==", classDocId));
+  }
+
+  const q = query(attendanceCollection, ...filters);
 
   const snap = await getDocs(q);
   if (snap.empty) return null;
@@ -244,7 +347,7 @@ export async function getAttendanceForStudent(
   studentId: string,
   date?: string
 ): Promise<AttendanceRecord[]> {
-  const filters: any[] = [where("studentId", "==", studentId)];
+  const filters: any[] = [where("studentId", "==", studentId), ...tenantConstraints(await getTenantScope())];
   if (date) filters.push(where("date", "==", date));
 
   const q = query(attendanceCollection, ...filters);
@@ -267,7 +370,7 @@ export async function getAttendanceForDate(
   const q = query(
     attendanceCollection,
     where("date", "==", dateIso),
-    orderBy("createdAt", "desc")
+    ...tenantConstraints(await getTenantScope())
   );
 
   const snap = await getDocs(q);
@@ -286,15 +389,15 @@ export async function getAttendanceForDate(
 export async function autoMarkAbsentsForToday() {
   try {
     const settings = await getAttendanceSettings();
-    if (!settings || !settings.closeAfter) return;
-    if (!hasPassedClosingTime(settings.closeAfter)) return;
+    if (!hasReachedAttendanceCloseTime(settings)) return;
 
     const today = todayISO();
 
-    const studentsSnap = await getDocs(collection(db, "students"));
+    const scope = await getTenantScope();
+    const studentsSnap = await getDocs(query(collection(db, "students"), ...tenantConstraints(scope)));
 
     const attendanceSnap = await getDocs(
-      query(collection(db, "attendance"), where("date", "==", today))
+      query(collection(db, "attendance"), where("date", "==", today), ...tenantConstraints(scope))
     );
 
     const marked = new Set(
@@ -309,9 +412,11 @@ export async function autoMarkAbsentsForToday() {
       const ref = doc(collection(db, "attendance"));
 
       promises.push(
-        setDoc(ref, {
-          studentId: studentDoc.id,
-          classId: studentDoc.data().classId ?? "",
+        setDoc(ref, withTenantScope({
+         studentId: studentDoc.id,
+subjectType: "student",
+subjectId: studentDoc.id,
+classId: studentDoc.data().classId ?? "",
           date: today,
           status: "absent",
           type: "in",
@@ -321,14 +426,14 @@ export async function autoMarkAbsentsForToday() {
           checkOutTime: null,
           createdAt: serverTimestamp(),
           auto: true,
-        })
+        }, scope))
       );
     });
 /* ===============================
    AUTO-MARK STAFF ABSENT
 ================================= */
 
-const staffSnap = await getDocs(collection(db, "staff"));
+const staffSnap = await getDocs(query(collection(db, "staff"), ...tenantConstraints(scope)));
 
 const markedStaff = new Set(
   attendanceSnap.docs
@@ -342,7 +447,7 @@ staffSnap.forEach(staffDoc => {
   const ref = doc(collection(db, "attendance"));
 
   promises.push(
-    setDoc(ref, {
+    setDoc(ref, withTenantScope({
       subjectType: "staff",
       subjectId: staffDoc.id,
       date: today,
@@ -354,7 +459,7 @@ staffSnap.forEach(staffDoc => {
       checkOutTime: null,
       createdAt: serverTimestamp(),
       auto: true,
-    })
+    }, scope))
   );
 });
     await Promise.all(promises);
@@ -363,3 +468,7 @@ staffSnap.forEach(staffDoc => {
     console.error("autoMarkAbsentsForToday error", err);
   }
 }
+
+
+
+

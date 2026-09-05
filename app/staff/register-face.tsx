@@ -1,4 +1,5 @@
 // app/staff/register-face.tsx
+
 import React, { useRef, useState } from "react";
 import {
   View,
@@ -13,19 +14,36 @@ import {
 } from "expo-camera";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { indexFace } from "../../src/services/faceService";
-import { getStaffById, upsertStaff } from "../../src/services/staff";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
+import { MaterialIcons } from "@expo/vector-icons";
 
 export default function RegisterFace() {
   const { staffId } = useLocalSearchParams<{ staffId: string }>();
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
   const cameraRef = useRef<CameraView>(null);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [loading, setLoading] = useState(false);
 
+  if (adminLoading || !adminReady) {
+    return (
+      <View className="flex-1 items-center justify-center">
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
   if (!permission?.granted) {
     return (
       <View className="flex-1 items-center justify-center">
+        <Pressable
+          onPress={() => router.back()}
+          className="absolute top-12 left-4 bg-black/60 rounded-full p-3"
+          hitSlop={8}
+        >
+          <MaterialIcons name="arrow-back" size={24} color="#fff" />
+        </Pressable>
         <Pressable onPress={requestPermission}>
           <Text>Grant Camera Permission</Text>
         </Pressable>
@@ -50,27 +68,12 @@ export default function RegisterFace() {
         return;
       }
 
-      // Index the face
       const result = await indexFace(staffId, photo.base64);
 
       if (!result.success) {
-        Alert.alert("Error", "Face indexing failed");
+      Alert.alert("Registration Failed", result.error || "Face may already be registered");
         return;
       }
-
-      // ✅ Fetch full staff object first
-      const staff = await getStaffById(staffId);
-      if (!staff) {
-        Alert.alert("Error", "Staff not found");
-        return;
-      }
-
-      // ✅ Upsert staff with updated face info
-      await upsertStaff({
-        ...staff,
-        faceImageUrl: photo.base64,
-        faceEnrolled: true,
-      });
 
       Alert.alert("Success", "Face registered successfully");
 
@@ -93,6 +96,14 @@ export default function RegisterFace() {
         style={{ flex: 1 }}
         facing="front"
       />
+
+      <Pressable
+        onPress={() => router.back()}
+        className="absolute top-12 left-4 bg-black/60 rounded-full p-3"
+        hitSlop={8}
+      >
+        <MaterialIcons name="arrow-back" size={24} color="#fff" />
+      </Pressable>
 
       <View className="absolute bottom-10 w-full items-center">
         <Pressable

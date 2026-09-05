@@ -11,10 +11,13 @@ import {
 import { useRouter } from "expo-router";import { getStaffGlobalSummary } from "../../src/services/staffAttendanceSummary";
 import { exportDailyStaffAttendance } from "../../src/services/exports/exportDailyStaffAttendance";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
+import AttendanceTotalsCards from "../../components/AttendanceTotalsCards";
+import { autoMarkAbsentStaff } from "../../src/services/autoMarkAbsent";
 
-/* ------------------------------------------------------------------ */
+/* - */
 /* HELPERS */
-/* ------------------------------------------------------------------ */
+/* - */
 function getLastNSchoolDays(n: number) {
   const out: string[] = [];
   let cursor = new Date();
@@ -30,11 +33,12 @@ function getLastNSchoolDays(n: number) {
   return out.reverse();
 }
 
-/* ------------------------------------------------------------------ */
+/* - */
 /* COMPONENT */
-/* ------------------------------------------------------------------ */
+/* - */
 export default function StaffDailyReport() {
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
 
   const [loading, setLoading] = useState(false);
   const [days, setDays] = useState<string[]>([]);
@@ -42,16 +46,16 @@ export default function StaffDailyReport() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const [staffRows, setStaffRows] = useState<any[]>([]);
 
-  /* ------------------------------------------------------------------ */
+  /* - */
   /* LOAD DAYS */
-  /* ------------------------------------------------------------------ */
+  /* - */
   useEffect(() => {
     setDays(getLastNSchoolDays(5));
   }, []);
 
-  /* ------------------------------------------------------------------ */
+  /* - */
   /* LOAD DAILY STAFF ATTENDANCE */
-  /* ------------------------------------------------------------------ */
+  /* - */
   useEffect(() => {
     (async () => {
       if (!selectedDay) {
@@ -62,7 +66,8 @@ export default function StaffDailyReport() {
       try {
         setLoading(true);
 
-const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
+        await autoMarkAbsentStaff({ dateIso: selectedDay });
+        const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
 
 
         setStaffRows(rows || []);
@@ -75,10 +80,10 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
     })();
   }, [selectedDay]);
 
-  /* ------------------------------------------------------------------ */
+  /* - */
   /* LOADING */
-  /* ------------------------------------------------------------------ */
-  if (loading) {
+  /* - */
+  if (adminLoading || !adminReady || loading) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator />
@@ -86,33 +91,33 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
     );
   }
 
-  /* ------------------------------------------------------------------ */
+  /* - */
   /* UI */
-  /* ------------------------------------------------------------------ */
+  /* - */
   return (
-    <ScrollView className="flex-1 bg-slate-300 p-4">
+    <ScrollView className="flex-1 bg-slate-300 p-3">
       <View className="flex-row items-center mb-2">
         <Pressable
           onPress={() => router.back()}
           className="p-1 mr-2"
           hitSlop={8}
         >
-          <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
+          <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </Pressable>
 
-        <Text className="text-2xl font-extrabold text-slate-900">
+        <Text className="text-xl font-extrabold text-slate-900">
           Daily Staff Attendance
         </Text>
       </View>
 
-      {/* -------------------- DAY SELECT -------------------- */}
+      {/* - DAY SELECT - */}
       <Text className="text-sm text-slate-600 mb-2">Select day</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         {days.map((d) => (
           <Pressable
             key={d}
             onPress={() => setSelectedDay(d)}
-            className={`p-4 mr-3 rounded-xl border ${
+            className={`px-3 py-2 mr-2 rounded-lg border ${
               selectedDay === d ? "bg-blue-600 border-blue-600" : "bg-white"
             }`}
           >
@@ -134,8 +139,8 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
         ))}
       </ScrollView>
 
-      {/* -------- DAILY EXPORT (PDF ONLY) -------- */}
-      <View className="mt-4 mb-4">
+      {/* - DAILY EXPORT (PDF ONLY) - */}
+      <View className="mt-3 mb-2">
         <Pressable
           disabled={!selectedDay || exportingPdf}
           onPress={async () => {
@@ -151,7 +156,7 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
               setExportingPdf(false);
             }
           }}
-          className={`px-4 py-3 rounded-xl items-center justify-center ${
+          className={`px-3 py-2.5 rounded-lg items-center justify-center ${
             selectedDay && !exportingPdf ? "bg-blue-600" : "bg-slate-400"
           }`}
         >
@@ -163,13 +168,14 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
         </Pressable>
       </View>
 
-      {/* -------------------- STAFF ROWS -------------------- */}
-      <Text className="text-lg font-semibold mt-6 mb-2">
+      {/* - STAFF ROWS - */}
+      <Text className="text-lg font-semibold mt-3 mb-1.5">
         Staff ({staffRows.length})
       </Text>
 
-      <Text className="text-ml text-slate-700 mb-2">
-        P = Present • L = Late • A = Absent
+      {staffRows.length > 0 ? <AttendanceTotalsCards rows={staffRows} label="Staff" /> : null}
+<Text className="text-ml text-slate-700 mb-2">
+        P = Present - L = Late - T = Attended - A = Absent
       </Text>
 
       {staffRows.length === 0 ? (
@@ -187,19 +193,20 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
                   id: item.staffId,
                   fromIso: selectedDay!,
                   toIso: selectedDay!,
-                  title: `Daily Report – ${selectedDay}`,
+                  title: `Daily Report - ${selectedDay}`,
                 },
               })
             }
-            className="bg-white p-4 rounded-xl mb-3 shadow"
+            className="bg-white px-3 py-2 rounded-md mb-2 shadow"
           >
             <Text className="font-semibold">
   {item.staffName} 
   {item.displayId ? ` (${item.displayId})` : ""}
 </Text>
-            <View className="flex-row justify-between mt-2">
+            <View className="flex-row justify-between mt-1.5">
               <Text className="text-emerald-600">P: {item.presentCount}</Text>
               <Text className="text-amber-600">L: {item.lateCount}</Text>
+              <Text className="text-sky-700">T: {item.attendedSessions}</Text>
               <Text className="text-red-500">A: {item.absentCount}</Text>
               <Text className="text-slate-700">
                 {item.percentagePresent.toFixed(1)}%
@@ -211,3 +218,6 @@ const rows = await getStaffGlobalSummary(selectedDay, selectedDay);
     </ScrollView>
   );
 }
+
+
+

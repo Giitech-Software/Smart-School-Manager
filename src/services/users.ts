@@ -6,12 +6,15 @@ import {
   setDoc,
   deleteDoc,
   query,
+  where,
   orderBy,
   serverTimestamp,
   updateDoc
 } from "firebase/firestore";
 import { db } from "../../app/firebase";
 import { type UserRole } from "./constants/roles";
+import { logAdminAction } from "./adminLogs";
+import { belongsToTenant, getTenantScope, tenantConstraints, withTenantScope } from "./tenantScope";
 
 /* ---------------- Types ---------------- */
  
@@ -24,6 +27,13 @@ export async function updateUserApproval(
   await updateDoc(ref, {
     approved,
   });
+  await logAdminAction({
+    action: "UPDATE_USER_APPROVAL",
+    targetType: "user",
+    targetId: uid,
+    description: `${approved ? "Approved" : "Unapproved"} user account`,
+    metadata: { approved },
+  });
 }
 
 
@@ -34,6 +44,10 @@ export type AppUser = {
   role?: UserRole | null;
   email?: string | null;
   createdAt?: any;
+  tenantId?: string | null;
+  tenantName?: string | null;
+  tenantType?: string | null;
+  tenantInviteCode?: string | null;
   wards?: string[];
 
   // 🔐 NEW — authorization fields
@@ -48,10 +62,10 @@ const USERS_COLLECTION = "users";
 
 export async function listUsers(): Promise<AppUser[]> {
   try {
-    const q = query(
-      collection(db, USERS_COLLECTION),
-      orderBy("createdAt", "desc")
-    );
+    const scope = await getTenantScope();
+    const q = scope.isScoped
+      ? query(collection(db, USERS_COLLECTION), ...tenantConstraints(scope))
+      : query(collection(db, USERS_COLLECTION), orderBy("createdAt", "desc"));
 
     const snap = await getDocs(q);
 
@@ -65,6 +79,10 @@ export async function listUsers(): Promise<AppUser[]> {
         role: data.role ?? null,
         email: data.email ?? null,
         createdAt: data.createdAt ?? Date.now(),
+        tenantId: data.tenantId ?? null,
+        tenantName: data.tenantName ?? null,
+        tenantType: data.tenantType ?? null,
+    tenantInviteCode: data.tenantInviteCode ?? null,
         
 // ✅ SAFE DEFAULT
         wards: Array.isArray(data.wards) ? data.wards : [],
@@ -86,7 +104,8 @@ export async function getUserById(id: string): Promise<AppUser | null> {
   try {
     const snap = await getDoc(doc(db, USERS_COLLECTION, id));
 
-    if (!snap.exists()) return null;
+    const scope = await getTenantScope();
+    if (!snap.exists() || !belongsToTenant(snap.data(), scope)) return null;
 
     const data = snap.data() as any;
 
@@ -97,6 +116,10 @@ export async function getUserById(id: string): Promise<AppUser | null> {
       role: data.role ?? null,
       email: data.email ?? null,
       createdAt: data.createdAt ?? Date.now(),
+      tenantId: data.tenantId ?? null,
+      tenantName: data.tenantName ?? null,
+      tenantType: data.tenantType ?? null,
+    tenantInviteCode: data.tenantInviteCode ?? null,
 
       // SAFE DEFAULTS
       wards: Array.isArray(data.wards) ? data.wards : [],
@@ -106,6 +129,43 @@ export async function getUserById(id: string): Promise<AppUser | null> {
     } as AppUser;
   } catch (err) {
     console.error("getUserById error:", err);
+    throw err;
+  }
+}
+
+export async function getUserByEmail(email: string): Promise<AppUser | null> {
+  try {
+    const scope = await getTenantScope();
+    const q = query(
+      collection(db, USERS_COLLECTION),
+      where("email", "==", email),
+      ...tenantConstraints(scope),
+    );
+
+    const snap = await getDocs(q);
+    if (snap.empty) return null;
+
+    const userDoc = snap.docs[0];
+    const data = userDoc.data() as any;
+
+    return {
+      id: userDoc.id,
+      uid: data.uid ?? userDoc.id,
+      displayName: data.displayName ?? null,
+      role: data.role ?? null,
+      email: data.email ?? null,
+      createdAt: data.createdAt ?? Date.now(),
+      tenantId: data.tenantId ?? null,
+      tenantName: data.tenantName ?? null,
+      tenantType: data.tenantType ?? null,
+    tenantInviteCode: data.tenantInviteCode ?? null,
+      wards: Array.isArray(data.wards) ? data.wards : [],
+      approved: Boolean(data.approved),
+      canTakeStaffAttendance: Boolean(data.canTakeStaffAttendance),
+      canTakeStudentAttendance: Boolean(data.canTakeStudentAttendance),
+    } as AppUser;
+  } catch (err) {
+    console.error("getUserByEmail error:", err);
     throw err;
   }
 }
@@ -125,9 +185,10 @@ export async function upsertUser(user: AppUser): Promise<string> {
 
     const ref = doc(db, USERS_COLLECTION, user.id);
 
+   const scope = await getTenantScope();
    await setDoc(
   ref,
-  {
+  withTenantScope({
     uid: user.id,
 
     ...(user.displayName !== undefined && {
@@ -140,6 +201,22 @@ export async function upsertUser(user: AppUser): Promise<string> {
 
     ...(user.role !== undefined && {
       role: user.role,
+    }),
+
+    ...(user.tenantId !== undefined && {
+      tenantId: user.tenantId,
+    }),
+
+    ...(user.tenantName !== undefined && {
+      tenantName: user.tenantName,
+    }),
+
+    ...(user.tenantType !== undefined && {
+      tenantType: user.tenantType,
+    }),
+
+    ...(user.tenantInviteCode !== undefined && {
+      tenantInviteCode: user.tenantInviteCode,
     }),
 
     ...(user.approved !== undefined && {
@@ -159,9 +236,26 @@ export async function upsertUser(user: AppUser): Promise<string> {
     }),
 
     createdAt: user.createdAt ?? serverTimestamp(),
-  },
+  }, scope),
   { merge: true }
 );
+    if (scope.role === "admin" || scope.role === "super_admin") {
+      await logAdminAction({
+      action: "UPSERT_USER",
+      targetType: "user",
+      targetId: user.id,
+      description: `Updated user ${user.displayName ?? user.email ?? user.id}`,
+      metadata: {
+        displayName: user.displayName,
+        email: user.email,
+        role: user.role,
+        approved: user.approved,
+        canTakeStaffAttendance: user.canTakeStaffAttendance,
+        canTakeStudentAttendance: user.canTakeStudentAttendance,
+        wardsCount: user.wards?.length,
+      },
+      });
+    }
 
 
     return user.id;
@@ -176,8 +270,19 @@ export async function upsertUser(user: AppUser): Promise<string> {
 export async function deleteUser(id: string): Promise<void> {
   try {
     await deleteDoc(doc(db, USERS_COLLECTION, id));
+    await logAdminAction({
+      action: "DELETE_USER",
+      targetType: "user",
+      targetId: id,
+      description: "Deleted user account",
+    });
   } catch (err) {
     console.error("deleteUser error:", err);
     throw err;
   }
 }
+
+
+
+
+

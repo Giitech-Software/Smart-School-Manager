@@ -8,27 +8,24 @@ import {
   Alert,
   ScrollView,
   Platform,
-    Image,   // ✅ add this
+  Image,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useRouter, useFocusEffect, Link } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth as firebaseAuth } from "./firebase";
 import { signOutUser } from "../src/services/auth";
 import { LinearGradient } from "expo-linear-gradient";
 import { MaterialIcons, Entypo } from "@expo/vector-icons";
-import useCurrentUser from "../src/hooks/useCurrentUser";  
+import useCurrentUser from "../src/hooks/useCurrentUser";
+import { useAssignedStudentClasses } from "../src/hooks/useAssignedStudentClasses";
 import { getAttendanceSettings } from "../src/services/attendanceSettings";
 //import { autoMarkAbsentsForToday } from "../src/services/attendance"; // adjust path if needed
 import { autoMarkAbsentsForToday } from "../src/services/autoMarkAbsent";
+import { allowsStudentAndParentFeatures } from "../src/services/tenantScope";
 /* ---------- helpers ---------- */
 
-function shortName(email?: string | null) {
-  if (!email) return "";
-  return email.split("@")[0];
-}
-
-// Step 4 — formatTime helper (NOT inside component)
+// Step 4 - formatTime helper (NOT inside component)
 function formatTime(time?: string) {
   if (!time) return "--";
   const [h, m] = time.split(":").map(Number);
@@ -37,8 +34,46 @@ function formatTime(time?: string) {
   return d.toLocaleTimeString([], {
     hour: "numeric",
     minute: "2-digit",
-    hour12: true, // ✅ FORCE AM / PM
+    hour12: true,
   });
+}
+
+type LandingAction = {
+  title: string;
+  subtitle: string;
+  icon: React.ComponentProps<typeof MaterialIcons>["name"];
+  iconBackground: string;
+  iconColor: string;
+  onPress: () => void;
+};
+
+function LandingActionGroup({ title, description, actions }: { title: string; description: string; actions: LandingAction[] }) {
+  if (!actions.length) return null;
+  return (
+    <View className="mb-3 overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <View className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <Text className="font-extrabold text-slate-900">{title}</Text>
+        <Text className="mt-0.5 text-sm text-slate-500">{description}</Text>
+      </View>
+      {actions.map((action, index) => (
+        <Pressable
+          key={action.title}
+          onPress={action.onPress}
+          android_ripple={{ color: "#DBEAFE" }}
+          className={`flex-row items-center px-4 py-3.5 ${index === actions.length - 1 ? "" : "border-b border-slate-200"}`}
+        >
+          <View className="h-11 w-11 items-center justify-center rounded-xl" style={{ backgroundColor: action.iconBackground }}>
+            <MaterialIcons name={action.icon} size={22} color={action.iconColor} />
+          </View>
+          <View className="ml-3 flex-1" style={{ minWidth: 0 }}>
+            <Text className="font-bold text-slate-900">{action.title}</Text>
+            <Text className="mt-0.5 text-sm text-slate-500">{action.subtitle}</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color="#94A3B8" />
+        </Pressable>
+      ))}
+    </View>
+  );
 }
 
 
@@ -46,15 +81,19 @@ export default function Home(): JSX.Element {
   const router = useRouter();
   const [user, setUser] = useState<User | null | undefined>(undefined);
   const [signingOut, setSigningOut] = useState(false);
-  const { userDoc, loading: userDocLoading } = useCurrentUser();
+  const { userDoc } = useCurrentUser();
+  const { hasAssignedClasses: hasAssignedStudentClasses } =
+    useAssignedStudentClasses(
+      userDoc?.approved === true || userDoc?.role === "admin" || userDoc?.role === "super_admin"
+        ? userDoc?.uid ?? userDoc?.id
+        : null
+    );
   const [showWelcome, setShowWelcome] = useState(true);
 
-  
+
 const [showStartOptions, setShowStartOptions] = useState(false);
-const [showReportOptions, setShowReportOptions] = useState(false);
-const [loadingReports, setLoadingReports] = useState(false);
 const [actor, setActor] = useState<"student" | "staff">("student");
-  // Step 2 — attendance settings state
+  // Step 2 - attendance settings state
  const [attendanceSettings, setAttendanceSettings] = useState<{
   lateAfter?: string;
   closeAfter?: string;
@@ -83,21 +122,21 @@ useFocusEffect(
 
     (async () => {
       try {
-        if (active && userDoc?.role === "admin") {
-          await autoMarkAbsentsForToday();
+        if (active && (userDoc?.role === "admin" || userDoc?.role === "super_admin")) {
+          await autoMarkAbsentsForToday({ adminUid: userDoc.uid ?? userDoc.id });
         }
-      } catch (e) {
-        console.warn("Auto-mark failed", e);
+      } catch (error) {
+        console.warn("Auto-mark failed", error);
       }
     })();
 
     return () => {
       active = false;
     };
-  }, [userDoc?.role])
+  }, [userDoc?.id, userDoc?.role, userDoc?.uid])
 );
 
-  // Step 3 — load attendance settings
+  // Step 3 - load attendance settings
  useFocusEffect(
   React.useCallback(() => {
     let active = true;
@@ -106,7 +145,7 @@ useFocusEffect(
       try {
         const settings = await getAttendanceSettings();
         if (active) setAttendanceSettings(settings);
-      } catch (e) {
+      } catch {
         console.warn("Failed to load attendance settings");
       }
     })();
@@ -137,12 +176,63 @@ useFocusEffect(
     );
   }
 
-  const isAdmin = Boolean(userDoc?.role === "admin");
+  const isSuperAdmin = Boolean(userDoc?.role === "super_admin");
+  const isAdmin = Boolean(userDoc?.role === "admin" || isSuperAdmin);
+  const isApproved = isAdmin || userDoc?.approved === true;
+  const allowsSchoolFeatures = allowsStudentAndParentFeatures(userDoc);
+  const personnelLabel = allowsSchoolFeatures ? "Staff" : userDoc?.tenantType === "company" ? "Employees" : "Personnel";
+  const personnelLabelLower = personnelLabel.toLowerCase();
+  const canTakeStudentAttendance =
+    allowsSchoolFeatures && (
+      isAdmin ||
+    (isApproved && userDoc?.canTakeStudentAttendance === true) ||
+    (isApproved && hasAssignedStudentClasses)
+    );
+  const canTakeStaffAttendance =
+    isAdmin || (isApproved && userDoc?.canTakeStaffAttendance === true);
+  const selectedActor = allowsSchoolFeatures ? actor : "staff";
+  const canTakeSelectedAttendance =
+    selectedActor === "staff" ? canTakeStaffAttendance : canTakeStudentAttendance;
+  const isStaffUser =
+    userDoc?.role === "teacher" ||
+    userDoc?.role === "staff" ||
+    userDoc?.role === "non_teaching_staff" ||
+    userDoc?.role === "general_staff";
+  const canUseStaffSelfService = isStaffUser || isAdmin;
+
+  const personalActions: LandingAction[] = canUseStaffSelfService
+    ? [
+        { title: "My Attendance", subtitle: "Check in, check out, and view today", icon: "how-to-reg", iconBackground: "#D1FAE5", iconColor: "#047857", onPress: () => router.push("/staff/my-attendance" as any) },
+        { title: "My Report", subtitle: "Review your attendance history", icon: "insights", iconBackground: "#E0E7FF", iconColor: "#4338CA", onPress: () => router.push("/staff/my-report" as any) },
+      ]
+    : [];
+
+  const attendanceActions: LandingAction[] = [
+    ...(canTakeStudentAttendance
+      ? [{ title: "Student Check-In", subtitle: "Scan QR and manage student attendance", icon: "qr-code" as const, iconBackground: "#DBEAFE", iconColor: "#1D4ED8", onPress: () => router.push({ pathname: "/attendance/checkin", params: { actor: "student" } }) }]
+      : []),
+    ...(canTakeStaffAttendance
+      ? [{ title: `${personnelLabel} Check-In`, subtitle: `Record ${personnelLabelLower} arrival and departure`, icon: "badge" as const, iconBackground: "#E0F2FE", iconColor: "#0369A1", onPress: () => router.push({ pathname: "/attendance/checkin", params: { actor: "staff" } }) }]
+      : []),
+  ];
+
+  const managementActions: LandingAction[] = isAdmin
+    ? [
+        { title: "Reports", subtitle: allowsSchoolFeatures ? "Daily • Weekly • Monthly • Termly • Yearly" : "Daily • Weekly • Monthly • Yearly", icon: "bar-chart", iconBackground: "#FEF3C7", iconColor: "#A16207", onPress: () => router.push({ pathname: "/reports", params: { type: selectedActor } }) },
+        { title: "Administration", subtitle: allowsSchoolFeatures ? "Terms, classes, people, and attendance" : `${personnelLabel}, users, and attendance`, icon: "verified-user", iconBackground: "#DBEAFE", iconColor: "#1E3A8A", onPress: () => router.push("/admin") },
+        ...(allowsSchoolFeatures
+          ? [{ title: "Add Student", subtitle: "Enroll and assign a new student", icon: "person-add" as const, iconBackground: "#FEE2E2", iconColor: "#B91C1C", onPress: () => router.push("/students") }]
+          : []),
+        ...(isSuperAdmin
+          ? [{ title: "Tenant Organisations", subtitle: "Manage organisations, administrators, and subscriptions", icon: "business" as const, iconBackground: "#EDE9FE", iconColor: "#6D28D9", onPress: () => router.push("/super-admin" as any) }]
+          : []),
+      ]
+    : [];
 
   return (
    <SafeAreaView
   className="flex-1 bg-blue-900"
-  edges={["left", "right", "bottom"]}   // 🚫 no top padding
+  edges={["left", "right", "bottom"]}
 >
 
 
@@ -155,45 +245,60 @@ useFocusEffect(
         className="text-lg font-semibold text-white"
         style={{ includeFontPadding: false }}
       >
-        Manage check-in • check-out • reports
+        Manage check-in, check-out, and reports
       </Text>
     </View>
   </View>
 
- 
+
   {/* Action row */}
 <View className="mt-4 flex-row items-center justify-between">
-  <View className="flex-row items-center space-x-3">
+  <View className="flex-row items-center" style={{ gap: 5 }}>
 
     {/* QR */}
-    <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
-      <MaterialIcons name="qr-code-scanner" size={16} color="#FFFFFF" />
-      <Text className="text-white ml-2 text-m">QR</Text>
+    <View className="bg-white/15 rounded-full px-2.5 py-2 flex-row items-center">
+      <MaterialIcons name="qr-code-scanner" size={15} color="#FFFFFF" />
+      <Text className="text-white ml-1 text-sm">QR</Text>
     </View>
 
     {/* Biometric */}
-    <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
-      <Entypo name="fingerprint" size={16} color="#FFFFFF" />
-      <Text className="text-white ml-2 text-m">Biometric</Text>
+    <View className="bg-white/15 rounded-full px-2.5 py-2 flex-row items-center">
+      <Entypo name="fingerprint" size={15} color="#FFFFFF" />
+      <Text className="text-white ml-1 text-sm">Biometric</Text>
     </View>
 
-    {/* ✅ Facial */}
-    <View className="bg-white/15 rounded-full px-3 py-2 flex-row items-center">
+    {/* Facial */}
+    <View className="bg-white/15 rounded-full px-2.5 py-2 flex-row items-center">
       <MaterialIcons
         name="face-retouching-natural"
-        size={16}
+        size={15}
         color="#FFFFFF"
       />
-      <Text className="text-white ml-2 text-m">Facial</Text>
+      <Text className="text-white ml-1 text-sm">Facial</Text>
+    </View>
+
+    {/* ID */}
+    <View className="bg-white/15 rounded-full px-2.5 py-2 flex-row items-center">
+      <MaterialIcons name="badge" size={15} color="#FFFFFF" />
+      <Text className="text-white ml-1 text-sm">ID</Text>
     </View>
 
   </View>
 
  <Pressable
-  onPress={() => setShowStartOptions(true)}
-  className="bg-yellow-400 px-4 py-2 rounded-full"
+  onPress={() => {
+    if (!canTakeStudentAttendance && !canTakeStaffAttendance) {
+      Alert.alert(
+        "Access denied",
+        "You are approved, but you have not been authorized to take attendance."
+      );
+      return;
+    }
+    setShowStartOptions(true);
+  }}
+  className="bg-yellow-400 px-3 py-2 rounded-full"
 >
-  <Text className="text-blue-900 font-bold">
+  <Text className="text-blue-900 font-bold text-sm">
     Start
   </Text>
 </Pressable>
@@ -211,7 +316,7 @@ useFocusEffect(
 
 
 
-{/* 🌟 Welcome Popup */}
+{/* Welcome Popup */}
 {showWelcome && (
   <View className="absolute top-0 left-0 right-0 bottom-0 bg-black/40 items-center justify-center px-6 z-50">
     <View className="w-full bg-white rounded-3xl p-6 shadow-2xl">
@@ -219,7 +324,7 @@ useFocusEffect(
         colors={["#1E3A8A", "#2563EB", "#0EA5E9"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
-        className="rounded-2xl p-4"
+        className="rounded-2xl p-4 pb-6"
       >
         <Text className="text-xl font-extrabold text-yellow-300 text-center">
           Welcome to ASTEM
@@ -231,13 +336,13 @@ useFocusEffect(
 
         <View className="mt-4 bg-white/20 p-3 rounded-xl">
           <Text className="text-white text-center text-sm">
-            Manage Attendance • Staff • Students • Reports
+            Manage people, attendance, and reports
           </Text>
         </View>
 
         <Pressable
           onPress={() => setShowWelcome(false)}
-          className="mt-5 bg-white rounded-full py-3"
+          className="mt-5 mb-1 bg-white rounded-full py-3"
         >
           <Text className="text-primary font-semibold text-center">
             Continue
@@ -255,6 +360,7 @@ useFocusEffect(
         Select Attendance Type
       </Text>
 
+      {canTakeStudentAttendance ? (
       <Pressable
         onPress={() => {
           setShowStartOptions(false);
@@ -269,7 +375,9 @@ useFocusEffect(
           Student Attendance
         </Text>
       </Pressable>
+      ) : null}
 
+      {canTakeStaffAttendance ? (
       <Pressable
         onPress={() => {
           setShowStartOptions(false);
@@ -281,9 +389,10 @@ useFocusEffect(
         className="bg-blue-600 rounded-xl py-3"
       >
         <Text className="text-white text-center font-semibold">
-          Staff Attendance
+          {personnelLabel} Attendance
         </Text>
       </Pressable>
+      ) : null}
 
       <Pressable
         onPress={() => setShowStartOptions(false)}
@@ -297,143 +406,52 @@ useFocusEffect(
 
       {/* Content area */}
       <ScrollView contentContainerStyle={{ padding: 16 }} className="flex-1">
-        {/* Quick cards */}
-        <View className="grid grid-cols-2 gap-4">
-          <Link href="/attendance/checkin" asChild>
-            <Pressable className="bg-white rounded-2xl p-4 shadow flex-row items-center">
-              <View className="p-3 rounded-lg bg-primary/10 mr-3">
-                <MaterialIcons name="qr-code" size={22} color="#1E3A8A" />
-              </View>
-              <View>
-                <Text className="font-semibold text-dark">Scan QR</Text>
-                <Text className="text-sm text-neutral mt-1">
-                  Fast student check-in/out
-                </Text> 
-              </View>
-            </Pressable>
-          </Link>
-<Link
-  href={{
-    pathname: "/attendance/checkin",
-    params: { actor: "staff" },
-  }}
-  asChild
->
-  <Pressable className="bg-white rounded-2xl p-4 shadow flex-row items-center">
-    <View className="p-3 rounded-lg bg-blue-500/10 mr-3">
-      <MaterialIcons name="badge" size={22} color="#2563EB" />
-    </View>
-    <View>
-      <Text className="font-semibold text-dark">
-        Staff Check-In
-      </Text>
-      <Text className="text-sm text-neutral mt-1">
-        Staff attendance tracking
-      </Text>
-    </View>
-  </Pressable>
-</Link>
+        <LandingActionGroup title="My workspace" description="Your attendance and personal records." actions={personalActions} />
+        <LandingActionGroup title="Attendance operations" description="Start and manage authorised attendance activities." actions={attendanceActions} />
+        <LandingActionGroup title="Management" description="Administration, reporting, and enrolment tools." actions={managementActions} />
 
-        
-        {isAdmin && (
-  <Pressable
-    className="bg-white rounded-2xl p-4 shadow flex-row items-center"
-    onPress={() =>
-  router.push({
-    pathname: "/reports",
-    params: { type: actor },
-  })
-}
-  >
-    <View className="p-3 rounded-lg bg-secondary/10 mr-3">
-      <MaterialIcons name="bar-chart" size={22} color="#FACC15" />
-    </View>
-    <View>
-      <Text className="font-semibold text-dark">Reports</Text>
-      <Text className="text-sm text-neutral mt-1">
-        Daily • Weekly • Monthly • Termly
-      </Text>
-    </View>
-  </Pressable>
-)}
-
-
-          {isAdmin ? (
-            <Pressable
-              onPress={() => router.push("/admin")}
-              className="bg-white rounded-2xl p-4 shadow flex-row items-center"
-            >
-              <View className="p-3 rounded-lg bg-primary/10 mr-3">
-                <MaterialIcons
-                  name="admin-panel-settings"
-                  size={22}
-                  color="#1E3A8A"
-                />
-              </View>
-              <View>
-                <Text className="font-semibold text-dark">Admin</Text>
-                <Text className="text-sm text-neutral mt-1">
-                  Setup terms, classes & users
-                </Text>
-              </View>
-            </Pressable>
-          ) : (
-            <View />
-          )}
-
-          <Pressable
-            onPress={() => router.push("/students")}
-            className="bg-white rounded-2xl p-4 shadow flex-row items-center"
-          >
-            <View className="p-3 rounded-lg bg-red/10 mr-3">
-              <Entypo name="add-to-list" size={22} color="#EF4444" />
-            </View>
-            <View>
-              <Text className="font-semibold text-dark">Add Student</Text>
-              <Text className="text-sm text-neutral mt-1">
-                Enroll new student
-              </Text>
-            </View>
-          </Pressable>
-        </View><View className="mt-6 bg-white rounded-2xl p-4 shadow">
+        {allowsSchoolFeatures ? <View className="mt-3 rounded-xl border border-slate-200 bg-white p-4">
   {/* Card title */}
   <Text className="font-semibold text-dark mb-3 text-lg">
-    Select Actor
+    Attendance group
   </Text>
+  <Text className="mb-3 text-sm text-slate-500">Choose whose attendance you are managing.</Text>
 
   {/* Buttons */}
   <View className="flex-row space-x-3">
+    {allowsSchoolFeatures ? (
     <Pressable
      onPress={() => setActor("student")}
       className={`flex-1 py-3 rounded-xl items-center justify-center border border-slate-200 ${
-        actor === "student" ? "bg-primary" : "bg-white"
+        selectedActor === "student" ? "bg-primary" : "bg-white"
       }`}
     >
       <Text
         className={`font-semibold ${
-          actor === "student" ? "text-white" : "text-dark"
+          selectedActor === "student" ? "text-white" : "text-dark"
         }`}
       >
         Students
       </Text>
     </Pressable>
+    ) : null}
 
     <Pressable
      onPress={() => setActor("staff")}
       className={`flex-1 py-3 rounded-xl items-center justify-center border border-slate-200 ${
-        actor === "staff" ? "bg-primary" : "bg-white"
+        selectedActor === "staff" ? "bg-primary" : "bg-white"
       }`}
     >
       <Text
         className={`font-semibold ${
-          actor === "staff" ? "text-white" : "text-dark"
+          selectedActor === "staff" ? "text-white" : "text-dark"
         }`}
       >
         Staff
       </Text>
     </Pressable>
   </View>
-</View>
+</View> : null}
         {/* Quick Actions */}
         <View className="mt-6 bg-white rounded-2xl p-4 shadow">
           <View className="flex-row items-center justify-between mb-3">
@@ -442,11 +460,12 @@ useFocusEffect(
           </View>
 
           <View className="space-y-3">
+            {canTakeSelectedAttendance ? (
             <Pressable
               onPress={() =>
   router.push({
     pathname: "/attendance/checkin",
-    params: { actor },
+    params: { actor: selectedActor },
   })
 }
               className="p-3 rounded-lg bg-primary/5 flex-row items-center justify-between"
@@ -454,37 +473,45 @@ useFocusEffect(
               <View className="flex-row items-center">
                 <MaterialIcons name="login" size={18} color="#1E3A8A" />
                 <Text className="ml-3 text-dark">
-                 {actor === "student" ? "Start class check-in" : "Start staff check-in"}   </Text>
+                 {selectedActor === "student" ? "Start class check-in" : `Start ${personnelLabelLower} check-in`}   </Text>
               </View>
              <Text className="text-sm text-neutral">
-  • {formatTime(attendanceSettings.lateAfter)}
+  Due {formatTime(attendanceSettings.lateAfter)}
 
 </Text>
 
             </Pressable>
+            ) : null}
 
+            {canTakeSelectedAttendance ? (
             <Pressable
-              onPress={() => router.push("/attendance/checkin")}
+              onPress={() =>
+                router.push({
+                  pathname: "/attendance/checkin",
+                  params: { actor: selectedActor },
+                })
+              }
               className="p-3 rounded-lg bg-red/5 flex-row items-center justify-between"
             >
               <View className="flex-row items-center">
                 <MaterialIcons name="logout" size={18} color="#EF4444" />
                 <Text className="ml-3 text-dark">
-               {actor === "student" ? "End of class check-out" : "End of staff check-out"}
+               {selectedActor === "student" ? "End of class check-out" : `End of ${personnelLabelLower} check-out`}
                 </Text>
               </View>
              <Text className="text-sm text-neutral">
-  • {formatTime(attendanceSettings.closeAfter)}
+  Due {formatTime(attendanceSettings.closeAfter)}
 
-</Text> 
+</Text>
     </Pressable>
+            ) : null}
 
 {isAdmin && (
   <Pressable
     onPress={() =>
       router.push({
         pathname: "/reports",
-        params: { type: actor }, // 🔥 PASS ACTOR
+        params: { type: selectedActor },
       })
     }
     className="p-3 rounded-lg border border-slate-100 flex-row items-center justify-between"
@@ -496,7 +523,7 @@ useFocusEffect(
       </Text>
     </View>
     <Text className="text-sm text-neutral">
-      • {actor === "student" ? 5 : 30} days
+      {selectedActor === "student" ? 5 : 30} days
     </Text>
   </Pressable>
 )}
@@ -512,7 +539,7 @@ useFocusEffect(
             disabled={signingOut}
           >
             <Text className="text-white font-semibold">
-              {signingOut ? "Signing out…" : "Sign out"}
+              {signingOut ? "Signing out..." : "Sign out"}
             </Text>
           </Pressable>
         </View>
@@ -520,12 +547,9 @@ useFocusEffect(
         {/* Footer */}
         <View className="mt-6 items-center">
           <Text className="text-xs text-neutral">
-            Developer • Solomon K. Aggrey
+            ASTEM Attendance - Mobile app
           </Text>
-          <Text className="text-xs text-neutral">
-            ASTEM Attendance • Mobile app
-          </Text>
-          <Text className="text-xs text-neutral">Version 1.0</Text>
+          <Text className="text-xs text-neutral">Version 2.0</Text>
         </View>
 
         <View style={{ height: Platform.OS === "ios" ? 40 : 24 }} />

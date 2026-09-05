@@ -14,6 +14,8 @@ import { computeAttendanceSummaryForStudent } from "../../src/services/attendanc
 import { getMonthRange } from "../../src/utils/dateRanges";
 import { exportMonthlyAttendancePdf } from "../../src/services/exports/exportMonthlyAttendancePdf";
 import { MaterialIcons } from "@expo/vector-icons";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
+import AttendanceTotalsCards from "../../components/AttendanceTotalsCards";
 import { listTerms } from "../../src/services/terms";
 import { intersectRanges } from "../../src/utils/dateRanges";
 
@@ -24,6 +26,7 @@ const MONTHS = [
 
 export default function MonthlyReport() {
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
 
   const today = new Date();
   const [year] = useState(today.getFullYear());
@@ -66,7 +69,7 @@ const monthRange = useMemo(() => {
   const [exportingMonthlyPdf, setExportingMonthlyPdf] = useState(false);
 
 
-  /* ---------------- LOAD DATA ---------------- */
+  /* - LOAD DATA - */
   useEffect(() => {
     (async () => {
       try {
@@ -83,7 +86,7 @@ const monthRange = useMemo(() => {
     })();
   }, []);
 
-  /* ---------------- RESOLVE CURRENT TERM ---------------- */
+  /* - RESOLVE CURRENT TERM - */
 useEffect(() => {
   (async () => {
     const terms = await listTerms().catch(() => []);
@@ -100,7 +103,7 @@ useEffect(() => {
   })(); 
 }, []); 
  
-  /* -------- FILTER STUDENTS BY CLASS -------- */
+  /* - FILTER STUDENTS BY CLASS - */
   const filteredStudents = useMemo(() => {
     if (!selectedClassKey) return students;
     return students.filter(
@@ -110,7 +113,7 @@ useEffect(() => {
     );
   }, [students, selectedClassKey]);
 
- /* -------- COMPUTE MONTH SUMMARY -------- */
+ /* - COMPUTE MONTH SUMMARY - */
 useEffect(() => {
   (async () => {
     if (!monthRange || filteredStudents.length === 0) {
@@ -132,7 +135,7 @@ useEffect(() => {
       ...sum,
       studentId: s.id, // still needed internally for routing
       studentName: s.name ?? s.displayName ?? "Unknown Student",
-      displayId: s.studentId ?? s.rollNo ?? null, // <--- THIS FIXES THE DISPLAY
+      displayId: s.studentId ?? s.rollNo ?? null, // <- THIS FIXES THE DISPLAY
     };
   })
 );
@@ -147,7 +150,7 @@ useEffect(() => {
 }, [filteredStudents, monthRange]);
 
 
-  if (loading) {
+  if (adminLoading || !adminReady || loading) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator />
@@ -156,7 +159,7 @@ useEffect(() => {
   }
 
   return (
-    <ScrollView className="flex-1 bg-slate-300 p-4">
+    <ScrollView className="flex-1 bg-slate-300 p-3">
       <View className="flex-row items-center mb-2">
   <Pressable
     onPress={() => router.back()}
@@ -165,26 +168,26 @@ useEffect(() => {
   >
     <MaterialIcons
       name="arrow-back"
-      size={26}
+      size={24}
       color="#0f172a"
     />
   </Pressable>
 
-  <Text className="text-2xl font-extrabold text-slate-900">
+  <Text className="text-xl font-extrabold text-slate-900">
    Monthly Reports
   </Text>
 </View>
 
       <Text className="text-sm text-slate-500 mt-1">{label}</Text>
 
-      {/* -------- MONTH SELECT -------- */}
-      <Text className="mt-6 mb-2 font-semibold">Select Month</Text>
+      {/* - MONTH SELECT - */}
+      <Text className="mt-3 mb-1.5 font-semibold">Select Month</Text>
     <ScrollView horizontal showsHorizontalScrollIndicator={true}>
   {MONTHS.map((m, i) => (
     <Pressable
       key={m}
       onPress={() => setSelectedMonth(i)}
-      className={`p-4 mr-3 rounded-xl border ${
+      className={`px-3 py-2 mr-2 rounded-lg border ${
         selectedMonth === i
           ? "bg-blue-600 border-blue-600"
           : "bg-white"
@@ -202,12 +205,12 @@ useEffect(() => {
 </ScrollView>
 
 
-      {/* -------- CLASS FILTER -------- */}
-      <Text className="mt-6 mb-2 font-semibold">Filter by Class</Text>
+      {/* - CLASS FILTER - */}
+      <Text className="mt-3 mb-1.5 font-semibold">Filter by Class</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={true}>
         <Pressable
           onPress={() => setSelectedClassKey(null)}
-          className={`px-4 py-2 mr-3 rounded-full ${
+          className={`px-3 py-1.5 mr-2 rounded-full ${
             selectedClassKey === null
               ? "bg-blue-600"
               : "bg-white border"
@@ -230,7 +233,7 @@ useEffect(() => {
             <Pressable
               key={key}
               onPress={() => setSelectedClassKey(key)}
-              className={`px-4 py-2 mr-3 rounded-full ${
+              className={`px-3 py-1.5 mr-2 rounded-full ${
                 selectedClassKey === key
                   ? "bg-blue-600"
                   : "bg-white border"
@@ -250,7 +253,7 @@ useEffect(() => {
         })}
       </ScrollView>
 
-<View className="mt-4">
+<View className="mt-3">
  <Pressable
   disabled={selectedMonth === null || exportingMonthlyPdf}
   onPress={async () => {
@@ -268,7 +271,7 @@ useEffect(() => {
       setExportingMonthlyPdf(false);
     }
   }}
-  className={`rounded-xl p-3 items-center justify-center ${
+  className={`rounded-lg px-3 py-2.5 items-center justify-center ${
     selectedMonth !== null && !exportingMonthlyPdf
       ? "bg-blue-600"
       : "bg-slate-400"
@@ -285,13 +288,14 @@ useEffect(() => {
 
 
 
-      {/* -------- RESULTS -------- */}
-      <Text className="mt-6 mb-2 font-semibold">
+      {/* - RESULTS - */}
+      <Text className="mt-3 mb-1.5 font-semibold">
         Students ({summaries.length})
       </Text>
 
+{summaries.length > 0 ? <AttendanceTotalsCards rows={summaries} label="Students" /> : null}
 <Text className="text-ml text-slate-700 mb-2">
-  P = Present • L = Late • T = Attended • A = Absent
+  P = Present - L = Late - T = Attended - A = Absent
 </Text>
       {computing ? (
         <ActivityIndicator />
@@ -316,14 +320,14 @@ useEffect(() => {
   })
 }
 
-            className="bg-white p-4 rounded-xl mb-3 shadow"
+            className="bg-white px-3 py-2 rounded-md mb-2 shadow"
           >
            <Text className="font-semibold">
   {s.studentName}
   {s.displayId ? ` (${s.displayId})` : ""}
 </Text>
 
-<View className="flex-row justify-between mt-2">
+<View className="flex-row justify-between mt-1.5">
   <Text className="text-emerald-600">
     P: {s.presentCount}
   </Text>

@@ -5,6 +5,7 @@ import {
   ActivityIndicator,
   FlatList,
   Pressable,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { doc, getDoc } from "firebase/firestore";
@@ -17,6 +18,7 @@ import {
 } from "../../../src/services/staffAttendanceSummary";
 
 import { exportStaffAttendancePdf } from "../../../src/services/exports/exportStaffAttendancePdf";
+import { useRequireAdmin } from "../../../src/hooks/useRouteAuthorization";
 
 /* ------------------------------------------------------------------ */
 /* UTIL: Last 5 Work Days */
@@ -40,6 +42,7 @@ function getLast5WorkDays() {
 /* COMPONENT */
 /* ------------------------------------------------------------------ */
 export default function StaffDetail() {
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
   const params = useLocalSearchParams();
   const router = useRouter();
 
@@ -52,6 +55,7 @@ export default function StaffDetail() {
   const [summary, setSummary] = useState<any>(null);
   const [daily, setDaily] = useState<any[]>([]);
   const [staffName, setStaffName] = useState<string>("");
+  const [exportingPdf, setExportingPdf] = useState(false);
 
   const [range, setRange] = useState<{
     fromIso: string;
@@ -123,7 +127,7 @@ export default function StaffDetail() {
   /* ------------------------------------------------------------------ */
   /* LOADING STATE */
   /* ------------------------------------------------------------------ */
-  if (loading) {
+  if (adminLoading || !adminReady || loading) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator />
@@ -145,11 +149,19 @@ export default function StaffDetail() {
     (safeSummary.presentCount ?? 0) +
     (safeSummary.lateCount ?? 0);
 
+  async function handleExportPdf() {
+    if (!range || !staffId || exportingPdf) return;
+    setExportingPdf(true);
+    try { await exportStaffAttendancePdf({ staffId, fromIso: range.fromIso, toIso: range.toIso, title: titleParam ?? "Staff Attendance Report" }); }
+    catch (err) { Alert.alert("Export failed", err instanceof Error ? err.message : "Unable to generate PDF."); }
+    finally { setExportingPdf(false); }
+  }
+
   /* ------------------------------------------------------------------ */
   /* UI */
   /* ------------------------------------------------------------------ */
   return (
-    <View className="flex-1 p-4 bg-slate-50">
+    <View className="flex-1 p-3 bg-slate-50">
       {/* ---------- HEADER ---------- */}
       <View className="flex-row items-center mb-2">
         <Pressable
@@ -159,12 +171,12 @@ export default function StaffDetail() {
         >
           <MaterialIcons
             name="arrow-back"
-            size={26}
+            size={24}
             color="#0f172a"
           />
         </Pressable>
 
-        <Text className="text-2xl font-bold mb-1">
+        <Text className="text-xl font-bold mb-1">
           {titleParam ?? "Staff Report"}
         </Text>
       </View>
@@ -175,24 +187,15 @@ export default function StaffDetail() {
 
       {/* ---------- EXPORT ---------- */}
       <Pressable
-        onPress={() =>
-          range &&
-          exportStaffAttendancePdf({
-            staffId,
-            fromIso: range.fromIso,
-            toIso: range.toIso,
-            title: titleParam ?? "Staff Attendance Report",
-          })
-        }
-        className="bg-indigo-600 py-2 px-4 rounded-lg mb-4"
+        onPress={handleExportPdf}
+        disabled={exportingPdf}
+        className="bg-indigo-600 py-2 px-3 rounded-lg mb-4"
       >
-        <Text className="text-white font-semibold text-center">
-          Export PDF
-        </Text>
+        {exportingPdf ? <View className="flex-row justify-center items-center"><ActivityIndicator color="#fff" /><Text className="text-white font-semibold ml-2">Generating PDF...</Text></View> : <Text className="text-white font-semibold text-center">Export PDF</Text>}
       </Pressable>
 
       {/* ---------- SUMMARY ---------- */}
-      <View className="bg-white p-4 rounded-xl mb-4 shadow">
+      <View className="bg-white p-3 rounded-lg mb-3 shadow">
         <Text className="font-semibold">Summary</Text>
 
         <View className="flex-row justify-between mt-2">
@@ -247,7 +250,7 @@ export default function StaffDetail() {
           data={daily}
           keyExtractor={(d) => d.id}
           renderItem={({ item }) => (
-            <View className="bg-white p-3 rounded-lg mb-2 flex-row justify-between">
+            <View className="bg-white px-3 py-2 rounded-md mb-2 flex-row justify-between">
               <View>
                 <Text className="text-slate-700">
                   {new Date(item.date).toLocaleDateString()}
@@ -262,6 +265,18 @@ export default function StaffDetail() {
                     })}
                   </Text>
                 )}
+
+                {item.lateReason ? (
+                  <Text className="text-xs text-amber-700">
+                    Movement book — late arrival: {item.lateReason}
+                  </Text>
+                ) : null}
+
+                {item.earlyCheckoutReason ? (
+                  <Text className="text-xs text-blue-700">
+                    Early out: {item.earlyCheckoutReason}
+                  </Text>
+                ) : null}
 
                 {item.checkOutTime && (
                   <Text className="text-xs text-slate-500">
@@ -303,3 +318,4 @@ export default function StaffDetail() {
     </View>
   );
 }
+

@@ -40,7 +40,12 @@ function AppHeader() {
         >
           <View className="px-6 pb-2">
             <View className="relative h-12 justify-center">
-              <Text className="absolute inset-0 mt-2 text-white font-bold text-2xl text-center">
+              <Text
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.82}
+                className="absolute left-12 right-12 mt-2 text-white font-bold text-2xl text-center"
+              >
                 ASTEM Attendance Register
               </Text>
 
@@ -64,13 +69,24 @@ export default function RootLayout() {
     const checkApproval = async () => {
       if (!auth.currentUser) return;
 
-      // Skip auth screens
-      if (pathname?.startsWith("/(auth)")) return;
+      const authPaths = [
+        "/login",
+        "/signup",
+        "/forgot-password",
+        "/pending-approval",
+        "/post-login",
+        "/verify-email",
+      ];
+
+      // Skip auth screens. Expo Router pathnames do not always include route groups.
+      if (pathname?.startsWith("/(auth)") || authPaths.includes(pathname ?? "")) {
+        return;
+      }
 
       try {
         const user = await getUserById(auth.currentUser.uid);
 
-        if (user && user.approved !== true) {
+        if (user && user.role !== "admin" && user.approved !== true) {
           router.replace("/(auth)/pending-approval");
         }
       } catch (err) {
@@ -91,3 +107,7 @@ export default function RootLayout() {
     </SafeAreaProvider>
   );
 }
+
+
+
+

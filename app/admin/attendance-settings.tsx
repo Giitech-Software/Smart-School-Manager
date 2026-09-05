@@ -7,11 +7,12 @@ import {
   ActivityIndicator,
   Alert,
   TextInput,
+  Switch,
 } from "react-native";
 import { useRouter } from "expo-router";
 
 import KeyboardAwareScreen from "@/components/KeyboardAwareScreen";
-import useCurrentUser from "../../src/hooks/useCurrentUser";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
 import {
   getAttendanceSettings,
   saveAttendanceSettings,
@@ -36,22 +37,34 @@ function formatTo12Hour(time24: string) {
   return `${hour}:${minute} ${ampm}`;
 }
 
+function isValidTime(time: string) {
+  if (!/^\d{2}:\d{2}$/.test(time)) return false;
+
+  const [hour, minute] = time.split(":").map(Number);
+  return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
+}
+
 /* =========================
    ✅ ADDITION END
 ========================= */
 
 export default function AttendanceSettingsAdmin() {
   const router = useRouter();
-  const { userDoc, loading: userDocLoading } = useCurrentUser();
+  const {
+    userDoc,
+    loading: userDocLoading,
+    ready: adminReady,
+  } = useRequireAdmin();
 
   const [lateAfter, setLateAfter] = useState("08:00");
   const [closeAfter, setCloseAfter] = useState("16:00");
   const [timezone, setTimezone] = useState("Africa/Accra");
+  const [allowStaffWeekendAttendance, setAllowStaffWeekendAttendance] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const isAdmin = userDoc?.role === "admin";
+  const isAdmin = adminReady;
 
   /* ---------------------------
      AUTH GUARD
@@ -81,6 +94,7 @@ export default function AttendanceSettingsAdmin() {
         setLateAfter(settings.lateAfter ?? "08:00");
         setCloseAfter(settings.closeAfter ?? "16:00");
         setTimezone(settings.timezone ?? "Africa/Accra");
+        setAllowStaffWeekendAttendance(settings.allowStaffWeekendAttendance ?? false);
       } catch (e) {
         console.error("load attendance settings", e);
         Alert.alert("Failed to load attendance settings");
@@ -94,7 +108,7 @@ export default function AttendanceSettingsAdmin() {
     };
   }, []);
 
-  if (loading || userDocLoading) {
+  if (loading || userDocLoading || !adminReady) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator />
@@ -106,10 +120,8 @@ export default function AttendanceSettingsAdmin() {
      SAVE
   --------------------------- */
   async function onSave() {
-    const timeRegex = /^\d{2}:\d{2}$/;
-
-    if (!timeRegex.test(lateAfter) || !timeRegex.test(closeAfter)) {
-      Alert.alert("Invalid time", "Use HH:mm format (e.g. 16:00)");
+    if (!isValidTime(lateAfter) || !isValidTime(closeAfter)) {
+      Alert.alert("Invalid time", "Use 24-hour HH:mm format (e.g. 16:00)");
       return;
     }
 
@@ -119,6 +131,7 @@ export default function AttendanceSettingsAdmin() {
         lateAfter,
         closeAfter,
         timezone,
+        allowStaffWeekendAttendance,
       });
       Alert.alert("Saved", "Attendance settings updated");
     } catch (e) {
@@ -183,7 +196,7 @@ export default function AttendanceSettingsAdmin() {
             Attendance Close Time
           </Text>
           <Text className="text-slate-600 text-sm mb-3">
-            Check-in and check-out will be disabled after this time.
+            Check-in will be disabled after this time. Check-out remains available for existing attendance records.
           </Text>
 
           <TextInput
@@ -220,6 +233,21 @@ export default function AttendanceSettingsAdmin() {
 
 
 
+        <View className="bg-white rounded-2xl p-4 shadow mb-6 flex-row items-center justify-between">
+          <View className="flex-1 pr-4">
+            <Text className="font-semibold text-lg mb-2">
+              Staff Weekend Attendance
+            </Text>
+            <Text className="text-slate-600 text-sm">
+              Allow staff check-in and check-out on Saturdays and Sundays. Student attendance remains blocked.
+            </Text>
+          </View>
+          <Switch
+            value={allowStaffWeekendAttendance}
+            onValueChange={setAllowStaffWeekendAttendance}
+          />
+        </View>
+
         {/* Save */}
         <Pressable
           disabled={saving}
@@ -240,4 +268,3 @@ export default function AttendanceSettingsAdmin() {
     </KeyboardAwareScreen>
   );
 }
- 

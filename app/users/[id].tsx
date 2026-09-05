@@ -7,18 +7,17 @@ import { auth } from "../../app/firebase";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import AppPicker from "@/components/AppPicker";
-
-const USER_ROLES = [
-  "parent",
-  "teacher",
-  "non_teaching_staff",
-  "general_staff",
-  "admin",
-] as const;
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
+import useCurrentUser from "../../src/hooks/useCurrentUser";
+import { allowsStudentAndParentFeatures } from "../../src/services/tenantScope";
 
 export default function UserDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
+  const { userDoc: currentUserDoc } = useCurrentUser();
+  const allowsSchoolFeatures = allowsStudentAndParentFeatures(currentUserDoc);
+  const currentUserIsSuperAdmin = currentUserDoc?.role === "super_admin";
   const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -52,7 +51,7 @@ export default function UserDetail() {
           return;
         }
         const meDoc = await getUserById(meUid); // reuse service to read current user's doc
-        setCurrentUserIsAdmin(Boolean(meDoc?.role === "admin"));
+        setCurrentUserIsAdmin(Boolean(meDoc?.role === "admin" || meDoc?.role === "super_admin"));
       } catch (e) {
         console.warn("Failed to read current user doc", e);
         setCurrentUserIsAdmin(false);
@@ -73,6 +72,16 @@ export default function UserDetail() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function isStaffAccount() {
+    return (
+      user?.role === "teacher" ||
+      user?.role === "non_teaching_staff" ||
+      user?.role === "staff" ||
+      user?.role === "general_staff" ||
+      user?.role === "admin" || user?.role === "super_admin"
+    );
   }
 
  async function handlePromoteToAdmin() {
@@ -113,7 +122,7 @@ export default function UserDetail() {
 }
 
 
-  if (loading) return (<View className="flex-1 items-center justify-center bg-slate-50"><ActivityIndicator/></View>);
+  if (adminLoading || !adminReady || loading) return (<View className="flex-1 items-center justify-center bg-slate-50"><ActivityIndicator/></View>);
 
   if (!user) return (<View className="flex-1 items-center justify-center bg-slate-50 p-4"><Text className="text-neutral">User not found.</Text></View>);
 
@@ -153,11 +162,12 @@ export default function UserDetail() {
         selectedValue={user.role ?? "teacher"}
         onValueChange={(value) => setUser({ ...user, role: value })}
       >
-        <Picker.Item label="Parent" value="parent" />
+        {allowsSchoolFeatures ? <Picker.Item label="Parent" value="parent" /> : null}
         <Picker.Item label="Teacher" value="teacher" />
         <Picker.Item label="Non-Teaching Staff" value="non_teaching_staff" />
         <Picker.Item label="General Staff" value="general_staff" />
         <Picker.Item label="Administrator" value="admin" />
+        {currentUserIsSuperAdmin ? <Picker.Item label="Super Admin" value="super_admin" /> : null}
       </AppPicker>
     </View>
 
@@ -180,8 +190,73 @@ export default function UserDetail() {
       </Pressable>
     </View>
 
+    <Text className="text-ml text-neutral-600 mb-1 mt-2">Attendance Permissions</Text>
+    <View className="mb-4 gap-2">
+      {allowsSchoolFeatures ? (
+      <Pressable
+        onPress={() =>
+          setUser((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  canTakeStudentAttendance: !prev.canTakeStudentAttendance,
+                }
+              : prev
+          )
+        }
+        className={`px-4 py-2 rounded ${
+          user.canTakeStudentAttendance ? "bg-green-600" : "bg-slate-500"
+        }`}
+      >
+        <Text className="text-white">
+          {user.canTakeStudentAttendance
+            ? "Can take student attendance"
+            : "Cannot take student attendance"}
+        </Text>
+      </Pressable>
+        ) : null}
+
+      <Pressable
+        onPress={() =>
+          setUser((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  canTakeStaffAttendance: !prev.canTakeStaffAttendance,
+                }
+              : prev
+          )
+        }
+        className={`px-4 py-2 rounded ${
+          user.canTakeStaffAttendance ? "bg-green-600" : "bg-slate-500"
+        }`}
+      >
+        <Text className="text-white">
+          {user.canTakeStaffAttendance
+            ? "Can take staff attendance"
+            : "Cannot take staff attendance"}
+        </Text>
+      </Pressable>
+    </View>
+
+    {isStaffAccount() && user.id ? (
+      <Pressable
+        onPress={() =>
+          router.push({
+            pathname: "/staff/register-from-user",
+            params: { uid: user.id },
+          } as any)
+        }
+        className="bg-blue-600 py-3 rounded mb-3"
+      >
+        <Text className="text-white text-center font-semibold">
+          Create / Link Staff Profile
+        </Text>
+      </Pressable>
+    ) : null}
+
     {/* Promote to Admin */}
-    {user.role !== "admin" && (
+    {user.role !== "admin" && user.role !== "super_admin" && (
       <Pressable
         onPress={handlePromoteToAdmin}
         className="mt-3 bg-red py-3 rounded"
@@ -189,7 +264,7 @@ export default function UserDetail() {
       >
         <View className="bg-green-300 rounded-lg px-4 py-2">
           <Text className="text-white text-center font-medium">
-            {promoting ? "Promoting…" : "Promote to Admin"}
+            {promoting ? "Promoting..." : "Promote to Admin"}
           </Text>
         </View>
       </Pressable>
@@ -203,8 +278,14 @@ export default function UserDetail() {
   className="bg-primary py-3 rounded"
   disabled={saving}
 >
-  <Text className="text-white text-center">{saving ? "Saving…" : "Save"}</Text>
+  <Text className="text-white text-center">{saving ? "Saving..." : "Save"}</Text>
 </Pressable>
     </View>
   );
 }
+
+
+
+
+
+

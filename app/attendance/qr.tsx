@@ -10,17 +10,24 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { CameraView, Camera } from "expo-camera";
 import * as Haptics from "expo-haptics";
-import { useRouter, Link, useLocalSearchParams } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 // use the unified register function (prevent duplicates)
 import { registerAttendanceUnified } from "../../src/services/attendance";
 import { getClassById } from "../../src/services/classes";
-import { listStudents, getStudentById } from "../../src/services/students";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+import { listStudents } from "../../src/services/students";
+import { collection, query, where, getDocs } from "firebase/firestore";
 
 import { db } from "../../app/firebase";
 import { validateQrPayload } from "../../src/services/qr";
 import { registerStaffAttendance } from "../../src/services/staffAttendance";
+import { getStaffByStaffId } from "../../src/services/staff";
+import { getAttendanceSettings } from "../../src/services/attendanceSettings";
+import { getMovementReasonRequirement } from "../../src/services/movementPolicy";
+import { useRequireAttendanceAccess } from "../../src/hooks/useRouteAuthorization";
+import { useCurrentStaff } from "../../src/hooks/useCurrentStaff";
+import { useMovementReasonPrompt } from "../../components/MovementReasonPrompt";
+import { getTenantScope, tenantConstraints } from "../../src/services/tenantScope";
 
 /** Helper: returns YYYY-MM-DD */
 function todayISO() {
@@ -70,13 +77,35 @@ function parseQRCodePayload(payload: string): {
 export default function QRScanner(): JSX.Element {
   const router = useRouter();
   const params = useLocalSearchParams();
+  const actorParam = params?.actor === "staff" ? "staff" : "student";
+  const isSelfServiceStaff = actorParam === "staff" && params?.self === "1";
+  const { staff: currentStaff, loading: currentStaffLoading } = useCurrentStaff();
+  const {
+    userDoc,
+    assignedStudentClasses,
+    loading: authorizationLoading,
+    ready: authorizationReady,
+    hasCapability,
+  } = useRequireAttendanceAccess(actorParam, {
+    allowSelfService: isSelfServiceStaff,
+  });
 
   const [hasPermission, setHasPermission] = useState<boolean | null>(null);
   const [scanned, setScanned] = useState(false);
   const [scannedPayload, setScannedPayload] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
+  const { promptMovementReason, movementReasonPrompt } = useMovementReasonPrompt();
 
   const [mode, setMode] = useState<"in" | "out">("in"); // default check-in
+
+  async function getMovementReasonFor(nextMode: "in" | "out") {
+    const settings = await getAttendanceSettings();
+    const requirement = getMovementReasonRequirement({ settings, mode: nextMode });
+    if (!requirement) return undefined;
+    const reason = await promptMovementReason(requirement);
+    if (!reason) throw new Error("A movement book entry is required to complete this attendance action.");
+    return reason;
+  }
 
   // selectedClassId from URL param (if provided)
   const [selectedClassIdFromParam, setSelectedClassIdFromParam] = useState<string | null>(null);
@@ -131,7 +160,11 @@ export default function QRScanner(): JSX.Element {
       } catch {}
 
       try {
-        const q = query(collection(db, "classes"), where("classId", "==", selectedClassIdFromParam));
+        const q = query(
+          collection(db, "classes"),
+          where("classId", "==", selectedClassIdFromParam),
+          ...tenantConstraints(await getTenantScope())
+        );
         const snap = await getDocs(q);
         if (mounted && snap.docs.length > 0) {
           const d = snap.docs[0];
@@ -247,6 +280,17 @@ if (!scannedId) {
 
      // Determine class id to use: prefer URL param, then QR payload
 const finalClassId = selectedClassIdFromParam ?? classIdFromQR ?? null;
+const classDocIdFromParam =
+  typeof params?.classDocId === "string" ? params.classDocId : null;
+const assignedClassForScan = assignedStudentClasses.find(
+  (cls) => cls.id === finalClassId || cls.classId === finalClassId
+);
+const finalClassDocId =
+  classDocIdFromParam ?? selectedClassResolvedDocId ?? assignedClassForScan?.id ?? null;
+const canUseAllStudentClasses =
+  params?.actor === "staff" ||
+  (userDoc?.role === "admin" || userDoc?.role === "super_admin") ||
+  hasCapability;
 
 // ✅ Only enforce class for STUDENTS
 if (!finalClassId && params?.actor !== "staff") {
@@ -259,10 +303,30 @@ if (!finalClassId && params?.actor !== "staff") {
   return;
 }
 
+if (params?.actor !== "staff") {
+  const assignedClassAllowed = assignedStudentClasses.some(
+    (cls) =>
+      cls.id === finalClassId ||
+      cls.classId === finalClassId ||
+      (finalClassDocId ? cls.id === finalClassDocId : false)
+  );
+
+  if (!canUseAllStudentClasses && !assignedClassAllowed) {
+    Alert.alert(
+      "Class not assigned",
+      "You can only take attendance for classes assigned to you."
+    );
+    setScanned(false);
+    setScannedPayload(null);
+    return;
+  }
+}
+
 
       setProcessing(true);
 try {
   const currentActor = params?.actor ?? "student";
+  const movementReason = await getMovementReasonFor(mode);
 
   if (currentActor === "staff") {
   // ============================
@@ -279,34 +343,46 @@ try {
 
   const finalId = scannedId; // e.g. "TCH-0017"
 
-  // 2️⃣ Find the actual staff document in Firestore
-  let staffDocId: string | null = null;
-  let staffName: string = "Staff Member";
+  if (isSelfServiceStaff) {
+    const ownIds = [currentStaff?.staffId, currentStaff?.id].filter(Boolean);
 
-  const qStaff = query(
-    collection(db, "staff"),
-    where("staffId", "==", finalId)
-  );
-
-  const snapStaff = await getDocs(qStaff);
-
-  if (snapStaff.empty) {
-    // Fallback: maybe the QR contains the document ID itself
-    const directDoc = await getDoc(doc(db, "staff", finalId));
-
-    if (directDoc.exists()) {
-      staffDocId = directDoc.id;
-      staffName = directDoc.data()?.name ?? "Staff Member";
-    } else {
-      Alert.alert("Unknown Staff", `No staff record found for ID: ${finalId}`);
+    if (!currentStaff?.id || !ownIds.includes(finalId)) {
+      Alert.alert(
+        "Wrong QR code",
+        "This QR code does not match your staff profile."
+      );
       setProcessing(false);
       setScanned(false);
       return;
     }
-  } else {
-    staffDocId = snapStaff.docs[0].id;
-    staffName = snapStaff.docs[0].data()?.name ?? "Staff Member";
+
+    await registerStaffAttendance({
+      staffId: currentStaff.id,
+      mode,
+      method: "qr",
+      biometric: false,
+      movementReason,
+    });
+
+    Alert.alert(
+      "Success",
+      `${currentStaff.name ?? "Staff member"} ${
+        mode === "in" ? "checked in" : "checked out"
+      } successfully.`
+    );
+    return;
   }
+
+  // 2️⃣ Find the actual staff document in Firestore
+  const staffRecord = await getStaffByStaffId(finalId);
+  if (!staffRecord?.id) {
+    Alert.alert("Unknown Staff", `No staff record found for ID: ${finalId}`);
+    setProcessing(false);
+    setScanned(false);
+    return;
+  }
+  const staffDocId = staffRecord.id;
+  const staffName = staffRecord.name ?? "Staff Member";
 
   // 3️⃣ Call your existing service
   // This internally calls findStaffAttendanceForDate + recordAttendanceCore
@@ -315,6 +391,7 @@ try {
     mode: mode,
     method: "qr",
     biometric: false,
+    movementReason,
   });
 
   Alert.alert(
@@ -332,7 +409,8 @@ try {
     // 1️⃣ Try studentId
     const q1 = query(
       collection(db, "students"),
-     where("studentId", "==", scannedId)
+     where("studentId", "==", scannedId),
+     ...tenantConstraints(await getTenantScope())
 
     );
     const snap1 = await getDocs(q1);
@@ -346,7 +424,8 @@ try {
     if (!studentDoc) {
       const q2 = query(
         collection(db, "students"),
-      where("rollNo", "==", scannedId)
+      where("rollNo", "==", scannedId),
+      ...tenantConstraints(await getTenantScope())
 
       );
       const snap2 = await getDocs(q2);
@@ -373,8 +452,11 @@ await registerAttendanceUnified({
   studentId: String(studentDoc.id),
   // Add the '!' to tell TypeScript: "I've checked, this is definitely not null"
   classId: finalClassId!, 
+  classDocId: finalClassDocId ?? undefined,
   mode,
   biometric: false,
+  enforceClassAssignment: !canUseAllStudentClasses,
+  movementReason,
 });
 
     Alert.alert(
@@ -401,10 +483,38 @@ await registerAttendanceUnified({
 }
 
     },
-    [scanned, processing, mode, selectedClassIdFromParam]
+    [
+      scanned,
+      processing,
+      mode,
+      selectedClassIdFromParam,
+      params?.actor,
+      isSelfServiceStaff,
+      currentStaff?.id,
+      currentStaff?.staffId,
+      currentStaff?.name,
+      params?.classDocId,
+      selectedClassResolvedDocId,
+      userDoc?.role,
+      hasCapability,
+      assignedStudentClasses,
+    ]
   );
 
   /** Permission states UI */
+  if (
+    authorizationLoading ||
+    (isSelfServiceStaff && currentStaffLoading) ||
+    !authorizationReady
+  ) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-white">
+        <ActivityIndicator size="large" />
+        <Text className="mt-3 text-neutral">Checking access...</Text>
+      </SafeAreaView>
+    );
+  }
+
   if (hasPermission === null) {
     return (
       <SafeAreaView className="flex-1 items-center justify-center bg-white">
@@ -420,7 +530,7 @@ await registerAttendanceUnified({
         <Text className="text-xl font-semibold mb-3">Camera permission required</Text>
 
         <Text className="text-neutral mb-6 text-center">
-          This screen needs camera access to scan student QR codes. Enable it in
+          This screen needs camera access to scan QR codes. Enable it in
           Settings.
         </Text>
 
@@ -437,11 +547,31 @@ await registerAttendanceUnified({
           </Text>
         </Pressable>
 
-        <Link href="/attendance/checkin" asChild>
-          <Pressable className="mt-4 border py-2 px-4 rounded-xl">
-            <Text className="text-neutral text-center">Back</Text>
-          </Pressable>
-        </Link>
+        <Pressable
+          onPress={() =>
+            router.replace(
+              isSelfServiceStaff
+                ? ("/staff/my-attendance" as any)
+                : ("/attendance/checkin" as any)
+            )
+          }
+          className="mt-4 border py-2 px-4 rounded-xl"
+        >
+          <Text className="text-neutral text-center">Back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  if (isSelfServiceStaff && !currentStaff) {
+    return (
+      <SafeAreaView className="flex-1 items-center justify-center bg-white p-6">
+        <Text className="text-xl font-semibold mb-3">
+          Staff profile not linked
+        </Text>
+        <Text className="text-neutral text-center">
+          Ask an administrator to link your user account to a staff record.
+        </Text>
       </SafeAreaView>
     );
   }
@@ -470,10 +600,19 @@ await registerAttendanceUnified({
          {/* TOP HEADER */}
 <View className="px-6 pt-10">
   <Text className="text-white text-xl font-bold text-center">
-    {params?.actor === "staff" ? "Scan Staff QR" : "Scan Student QR"}
+    {isSelfServiceStaff
+      ? "Scan Your Staff QR"
+      : params?.actor === "staff"
+      ? "Scan Staff QR"
+      : "Scan Student QR"}
   </Text>
   <Text className="text-white/70 text-sm text-center mt-1">
-    Point your camera at the {params?.actor === "staff" ? "staff member's" : "student's"} QR code
+    Point your camera at the{" "}
+    {isSelfServiceStaff
+      ? "QR code linked to your profile"
+      : params?.actor === "staff"
+      ? "staff member's QR code"
+      : "student's QR code"}
   </Text>
 
 
@@ -591,7 +730,9 @@ await registerAttendanceUnified({
           <Pressable
   onPress={() => {
     router.replace({
-      pathname: "/attendance/checkin",
+      pathname: isSelfServiceStaff
+        ? "/staff/my-attendance"
+        : "/attendance/checkin",
       params: { actor: params?.actor ?? "student" },
     });
   }}
@@ -618,7 +759,13 @@ await registerAttendanceUnified({
                   <ActivityIndicator color="#fff" />
                 ) : (
                   <Pressable
-                    onPress={() => router.replace("/attendance/checkin")}
+                    onPress={() =>
+                      router.replace(
+                        isSelfServiceStaff
+                          ? ("/staff/my-attendance" as any)
+                          : ("/attendance/checkin" as any)
+                      )
+                    }
                     className="py-3 px-4 rounded-xl bg-white/10"
                   >
                     <Text className="text-white font-semibold">Cancel</Text>
@@ -629,6 +776,10 @@ await registerAttendanceUnified({
           </LinearGradient> 
         </View>
       </View>
+      {movementReasonPrompt}
     </SafeAreaView>
   );
 }
+
+
+

@@ -5,12 +5,16 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { listStaff, deleteStaff } from "../../src/services/staff";
 import type { Staff } from "../../src/services/types";
 import { MaterialIcons } from "@expo/vector-icons";
+import AppInput from "@/components/AppInput";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
 
 export default function StaffList() {
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+const [search, setSearch] = useState("");
 
   useFocusEffect(
     React.useCallback(() => {
@@ -64,14 +68,22 @@ export default function StaffList() {
     );
   }
 
-  if (loading) {
+  if (adminLoading || !adminReady || loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator />
       </View>
     );
   }
+const filteredStaff = staffList.filter((s) => {
+  const q = search.toLowerCase();
 
+  return (
+    s.name?.toLowerCase().includes(q) ||
+    s.staffId?.toLowerCase().includes(q) ||
+    s.email?.toLowerCase().includes(q)
+  );
+});
   return (
     <View className="flex-1 bg-slate-300 p-4">
       {/* Header */}
@@ -80,24 +92,39 @@ export default function StaffList() {
           <Pressable onPress={() => router.back()} className="p-1 mr-2" hitSlop={8}>
             <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
           </Pressable>
-          <Text className="text-2xl font-extrabold text-slate-900">Staff</Text>
+          <Text className="text-2xl font-extrabold text-slate-900">
+  Staff ({search ? `${filteredStaff.length} of ${staffList.length}` : staffList.length})
+</Text>
         </View>
 
-        <Pressable
-          onPress={() => router.push("/staff/create")}
-          className="bg-primary py-2 px-3 rounded-xl"
-        >
-          <Text className="text-white font-medium">Add</Text>
-        </Pressable>
+        <View className="flex-row gap-2">
+          <Pressable
+            onPress={() => router.push("/staff/bulk-import" as any)}
+            className="bg-slate-700 py-2 px-3 rounded-xl"
+          >
+            <Text className="text-white font-medium">Import</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => router.push("/staff/create")}
+            className="bg-primary py-2 px-3 rounded-xl"
+          >
+            <Text className="text-white font-medium">Add</Text>
+          </Pressable>
+        </View>
       </View>
-
+<AppInput
+  value={search}
+  onChangeText={setSearch}
+  placeholder="Search staff..."
+  className="border p-3 rounded-xl mb-3 bg-white"
+/>
       {/* Staff List */}
       <FlatList
-        data={staffList}
+        data={filteredStaff}
         keyExtractor={(item) => item.id!}
         renderItem={({ item }) => {
           // Biometric status
-          const face = !!item.faceEnrolled;
+         const face = !!item.faceId;
           const fingerprint = !!item.fingerprintId;
 
           // Card color based on enrollment
@@ -183,22 +210,24 @@ export default function StaffList() {
                   <MaterialIcons
                     name="face-retouching-natural"
                     size={20}
-                    color="#9333EA"
+                  color={face ? "#16A34A" : "#9333EA"}
                   />
                 </Pressable>
 
-                {/* Fingerprint Enroll */}
-                {!fingerprint && (
-                  <Pressable
-                    onPress={() =>
-                      router.push(`/staff/enroll-biometric?id=${item.id}`)
-                    }
-                    className="p-2"
-                  >
-                    <MaterialIcons name="fingerprint" size={20} color="#2563EB" />
-                  </Pressable>
-                )}
-              </View>
+                {/* Fingerprint Register / Update */}
+<Pressable
+  onPress={() =>
+    router.push(`/staff/enroll-biometric?id=${item.id}`)
+  }
+  className="p-2"
+>
+  <MaterialIcons
+    name="fingerprint"
+    size={20}
+    color={fingerprint ? "#16A34A" : "#2563EB"}
+  />
+</Pressable>
+    </View>
             </View>
           );
         }}

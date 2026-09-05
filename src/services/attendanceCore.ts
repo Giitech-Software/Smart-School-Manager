@@ -1,15 +1,18 @@
 // mobile/src/services/attendanceCore.ts
 
 import {
-  addDoc,
   updateDoc,
   doc,
+  getDoc,
+  runTransaction,
   serverTimestamp,
   collection,
 } from "firebase/firestore";
-import { db } from "../../app/firebase";
+import { auth, db } from "../../app/firebase";
 import type { AttendanceRecord } from "./types";
 import { validateSchoolLocation } from "./locationGuard";
+import { logAdminAction } from "./adminLogs";
+import { getTenantScope, withTenantScope } from "./tenantScope";
 /**
  * Supported attendance subjects
  */
@@ -36,9 +39,42 @@ export async function recordAttendanceCore({
   };
 }): Promise<AttendanceRecord> {
   // 🔒 SECURITY: Validate user location before recording attendance
-await validateSchoolLocation();
+  const locationValidation = await validateSchoolLocation();
+  await assertCanRecordDuringGeofenceBypass(
+    locationValidation.geofencingBypassed,
+    record.subjectType
+  );
   const now = new Date().toISOString();
+  const tenantScope = await getTenantScope();
   const attendanceCollection = collection(db, collectionName);
+  const locationAudit = {
+    verificationMethod: locationValidation.verificationMethod,
+    campusNetworkVerified: locationValidation.campusNetworkVerified ?? false,
+    campusServerName: locationValidation.campusServerName ?? null,
+    campusInstitutionId: locationValidation.campusInstitutionId ?? null,
+    campusTokenExpiresAt: locationValidation.campusTokenExpiresAt ?? null,
+    wifiBssidVerified: locationValidation.wifiBssidVerified ?? false,
+    wifiBssid: locationValidation.wifiBssid ?? null,
+    wifiSsid: locationValidation.wifiSsid ?? null,
+    wifiLabel: locationValidation.wifiLabel ?? null,
+    latitude: locationValidation.latitude,
+    longitude: locationValidation.longitude,
+    accuracyMeters: locationValidation.accuracyMeters,
+    distanceMeters:
+      typeof locationValidation.distanceMeters === "number"
+        ? Math.round(locationValidation.distanceMeters)
+        : null,
+    allowedDistanceMeters:
+      typeof locationValidation.allowedDistanceMeters === "number"
+        ? Math.round(locationValidation.allowedDistanceMeters)
+        : null,
+    radiusMeters: locationValidation.radiusMeters,
+    geofencingBypassed: locationValidation.geofencingBypassed,
+    bypassReason: locationValidation.bypassReason ?? null,
+    bypassedBy: locationValidation.bypassedBy ?? null,
+    bypassExpiresAt: locationValidation.bypassExpiresAt ?? null,
+    checkedAt: now,
+  };
 
   /* ===============================
      UPDATE EXISTING RECORD
@@ -58,9 +94,25 @@ await validateSchoolLocation();
 
     updateFields.biometric = record.biometric ?? false;
     updateFields.method = record.method ?? updateFields.method;
+    updateFields.location = locationAudit;
 
     const ref = doc(db, collectionName, id);
-    await updateDoc(ref, updateFields);
+    await updateDoc(ref, withTenantScope(updateFields, tenantScope));
+    await logAdminAction({
+      action: record.type === "out" ? "CHECK_OUT" : "UPDATE_ATTENDANCE",
+      targetType: "attendance",
+      targetId: ref.id,
+      description: `${record.subjectType} ${record.subjectId} ${
+        record.type === "out" ? "checked out" : "attendance updated"
+      }`,
+      metadata: {
+        subjectType: record.subjectType,
+        subjectId: record.subjectId,
+        date: record.date,
+        method: updateFields.method,
+        collectionName,
+      },
+    });
 
     return {
       ...(updateFields as AttendanceRecord),
@@ -71,7 +123,7 @@ await validateSchoolLocation();
   /* ===============================
      CREATE NEW CHECK-IN
   =============================== */
-  const data = {
+  const data = withTenantScope({
     ...record,
     createdAt: serverTimestamp(),
     checkInTime: now,
@@ -79,9 +131,33 @@ await validateSchoolLocation();
     type: "in",
     biometric: record.biometric ?? false,
     method: record.method ?? "qr",
-  };
+    location: locationAudit,
+  }, tenantScope);
 
-  const ref = await addDoc(attendanceCollection, data);
+  const ref = doc(
+    attendanceCollection,
+    stableAttendanceId(record.subjectType, record.subjectId, record.date)
+  );
+  await runTransaction(db, async (transaction) => {
+    const existing = await transaction.get(ref);
+    if (existing.exists()) {
+      throw new Error("Attendance already exists for this person today.");
+    }
+    transaction.set(ref, data);
+  });
+  await logAdminAction({
+    action: "CHECK_IN",
+    targetType: "attendance",
+    targetId: ref.id,
+    description: `${record.subjectType} ${record.subjectId} checked in`,
+    metadata: {
+      subjectType: record.subjectType,
+      subjectId: record.subjectId,
+      date: record.date,
+      method: data.method,
+      collectionName,
+    },
+  });
 
   return {
     ...data,
@@ -89,6 +165,36 @@ await validateSchoolLocation();
     createdAt: new Date().toISOString(),
   } as AttendanceRecord;
 } // ✅ CLOSES recordAttendanceCore PROPERLY
+
+function stableAttendanceId(subjectType: string, subjectId: string, date: string) {
+  return `${encodeURIComponent(subjectType)}_${encodeURIComponent(subjectId)}_${date}`;
+}
+
+async function assertCanRecordDuringGeofenceBypass(
+  geofencingBypassed: boolean,
+  subjectType: AttendanceSubjectType
+) {
+  if (!geofencingBypassed) return;
+
+  const uid = auth.currentUser?.uid;
+  if (!uid) {
+    throw new Error("Sign in again before recording attendance.");
+  }
+
+  const userSnap = await getDoc(doc(db, "users", uid));
+  const user = userSnap.data();
+  const isAdmin = user?.role === "admin";
+  const canTakeAttendance =
+    subjectType === "staff"
+      ? user?.canTakeStaffAttendance === true
+      : user?.canTakeStudentAttendance === true;
+
+  if (!isAdmin && !canTakeAttendance) {
+    throw new Error(
+      "Geofencing is currently bypassed. Only authorized attendance takers can record attendance."
+    );
+  }
+}
 
 /* ===============================
    STUDENT-SPECIFIC HANDLERS
@@ -145,3 +251,5 @@ export async function handleStudentQrScan({
     },
   });
 } // ✅ CLOSED
+
+

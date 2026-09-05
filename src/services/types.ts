@@ -20,6 +20,8 @@ export type Student = {
 
   createdAt?: any;
   updatedAt?: any;
+  tenantId?: string | null;
+  tenantName?: string | null;
 };
 
 export type AttendanceRecord = {
@@ -27,6 +29,7 @@ export type AttendanceRecord = {
 
   studentId: string;
   classId?: string;
+  classDocId?: string;
 
   date: string;               // YYYY-MM-DD
   type: "in" | "out";         // check-in or check-out
@@ -35,11 +38,38 @@ export type AttendanceRecord = {
   checkOutTime?: string | null;
 
   status?: "present" | "absent" | "late" | "excused";
+  lateReason?: string | null;
+  lateMinutes?: number | null;
+  earlyCheckoutReason?: string | null;
+  earlyCheckoutMinutes?: number | null;
 
   // ✅ FIXED + COMPLETE
   method?: "qr" | "fingerprint" | "face" | "manual";
 
   biometric?: boolean;
+
+  location?: {
+    verificationMethod?: "gps" | "campus_network" | "wifi_bssid" | "geofence_bypass";
+    campusNetworkVerified?: boolean;
+    campusServerName?: string | null;
+    campusInstitutionId?: string | null;
+    campusTokenExpiresAt?: string | null;
+    wifiBssidVerified?: boolean;
+    wifiBssid?: string | null;
+    wifiSsid?: string | null;
+    wifiLabel?: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    accuracyMeters: number | null;
+    distanceMeters: number | null;
+    allowedDistanceMeters: number | null;
+    radiusMeters: number | null;
+    geofencingBypassed?: boolean;
+    bypassReason?: string | null;
+    bypassedBy?: string | null;
+    bypassExpiresAt?: string | null;
+    checkedAt: string;
+  };
 
   createdAt?: {
     seconds: number;
@@ -57,6 +87,8 @@ export type Term = {
 
   createdAt?: any;
   updatedAt?: any;
+  tenantId?: string | null;
+  tenantName?: string | null;
 };
 
 export type AdminLog = {
@@ -80,6 +112,7 @@ export interface Staff {
   name: string;
   email: string;
   role?: string;        // teacher, admin, non-teaching, etc
+  roleType?: string;
   fingerprintId?: string;
     faceImageUrl?: string;
     faceId?: string;   // ✅ ADD THIS
@@ -87,3 +120,4 @@ export interface Staff {
   createdAt?: any;
   updatedAt?: any;
 }
+

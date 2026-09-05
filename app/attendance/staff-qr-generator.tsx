@@ -16,11 +16,10 @@ import * as Print from "expo-print";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { captureRef } from "react-native-view-shot";
-import { collection, getDocs, query, orderBy } from "firebase/firestore";
-import { db } from "../../app/firebase";
-
 import { generateQrPayload } from "../../src/services/qr";
+import { listStaff } from "../../src/services/staff";
 import AppInput from "@/components/AppInput";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
 
 /* Helpers */
 const wait = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -34,6 +33,7 @@ function toDataURLPromise(ref: any): Promise<string> {
 
 export default function StaffQrGenerator() {
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
   const [loading, setLoading] = useState(true);
   const [staffList, setStaffList] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -50,9 +50,12 @@ export default function StaffQrGenerator() {
   useEffect(() => {
     (async () => {
       try {
-        const q = query(collection(db, "staff"), orderBy("name", "asc"));
-        const snap = await getDocs(q);
-        setStaffList(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+        const rows = await listStaff();
+        setStaffList(
+          rows
+            .filter((item) => Boolean(item.id))
+            .sort((a, b) => (a.name ?? a.staffId ?? "").localeCompare(b.name ?? b.staffId ?? ""))
+        );
       } catch (err) {
         Alert.alert("Error", "Failed to load staff.");
       } finally {
@@ -121,6 +124,14 @@ export default function StaffQrGenerator() {
       setExporting(false);
       setHiddenStaff(null);
     }
+  }
+
+  if (adminLoading || !adminReady || loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-slate-50 items-center justify-center">
+        <ActivityIndicator />
+      </SafeAreaView>
+    );
   }
 
   return (

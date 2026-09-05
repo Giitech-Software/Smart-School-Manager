@@ -1,15 +1,21 @@
 // mobile/app/terms/create.tsx
 import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, Alert } from "react-native";
+import { View, Text, TextInput, Pressable, Alert, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { createTerm } from "../../src/services/terms";
 import type { Term } from "../../src/services/types";
 import { autoGenerateWeeksForTerm } from "../../src/services/weeks";
 import { MaterialIcons } from "@expo/vector-icons";
 import AppInput from "@/components/AppInput";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
+import useCurrentUser from "../../src/hooks/useCurrentUser";
+import { allowsStudentAndParentFeatures } from "../../src/services/tenantScope";
 
 export default function TermCreate() {
   const router = useRouter();
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
+  const { userDoc, loading: userLoading } = useCurrentUser();
+  const allowsSchoolFeatures = allowsStudentAndParentFeatures(userDoc);
 
   const [name, setName] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -28,7 +34,7 @@ export default function TermCreate() {
   return;
 }
 
-// ⚠️ ADD HERE
+// ÃƒÂ¢Ã…Â¡Ã‚Â ÃƒÂ¯Ã‚Â¸Ã‚Â ADD HERE
 if (isWeekend(startDate) || isWeekend(endDate)) {
   Alert.alert(
     "Weekend dates",
@@ -42,14 +48,14 @@ setSaving(true);
 
   setSaving(true);
   try {
-    // 1️⃣ create term and get its ID
+    // 1ÃƒÂ¯Ã‚Â¸Ã‚ÂÃƒÂ¢Ã†â€™Ã‚Â£ create term and get its ID
     const termRef = await createTerm({
       name: name.trim(),
       startDate,
       endDate,
     } as Term);
 
-    // 2️⃣ auto-generate weeks from term dates
+    // 2ÃƒÂ¯Ã‚Â¸Ã‚ÂÃƒÂ¢Ã†â€™Ã‚Â£ auto-generate weeks from term dates
     await autoGenerateWeeksForTerm(
       termRef.id,
       startDate,
@@ -65,6 +71,23 @@ setSaving(true);
     setSaving(false);
   }
 }
+
+  if (adminLoading || userLoading || !adminReady) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-50">
+        <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (!allowsSchoolFeatures) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-50 p-6">
+        <Text className="text-lg font-bold text-slate-900">School feature unavailable</Text>
+        <Text className="mt-2 text-center text-sm text-slate-500">Creating terms is only available for school tenants.</Text>
+      </View>
+    );
+  }
 
   return (
     <View className="flex-1 bg-slate-50 p-4">
@@ -119,7 +142,7 @@ setSaving(true);
         className={`py-3 rounded ${saving ? "bg-slate-400" : "bg-primary"}`}
       >
         <Text className="text-white text-center text-xl font-semibold">
-          {saving ? "Saving…" : "Create term"}
+          {saving ? "SavingÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¦" : "Create term"}
         </Text>
       </Pressable>
     </View>

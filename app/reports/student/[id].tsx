@@ -1,6 +1,6 @@
 //mobile/app/reports/student/[id].tsx
 import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator, FlatList } from "react-native";
+import { View, Text, ActivityIndicator, FlatList, Alert } from "react-native";
 import {
   getAttendanceSummary,
   getAttendanceForStudentInRange,
@@ -8,11 +8,12 @@ import {
 
 import { useLocalSearchParams } from "expo-router";
 import { doc, getDoc } from "firebase/firestore"; 
-import { db } from "../../firebase";
+import { auth, db } from "../../firebase";
 import { Pressable } from "react-native";
 import { exportStudentAttendancePdf } from "../../../src/services/exports/exportStudentAttendancePdf";
 import { MaterialIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import useCurrentUser from "../../../src/hooks/useCurrentUser";
 
 /**
  * Student detail page
@@ -35,6 +36,7 @@ function getLast5SchoolDays() {
 }
 
 export default function StudentDetail() {
+  const { userDoc, loading: userLoading } = useCurrentUser();
   const params = useLocalSearchParams();
 
   const studentId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -43,13 +45,61 @@ export default function StudentDetail() {
   const titleParam = params.title as string | undefined;
 const router = useRouter();
 
+  const [accessLoading, setAccessLoading] = useState(true);
+  const [hasAccess, setHasAccess] = useState(false);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<any>(null);
   const [daily, setDaily] = useState<any[]>([]);
   const [studentName, setStudentName] = useState<string>("");
+  const [exportingPdf, setExportingPdf] = useState(false);
+
+  async function handleExportPdf() {
+    if (!studentId || exportingPdf) return;
+    setExportingPdf(true);
+    try {
+      await exportStudentAttendancePdf({ studentId, fromIso: fromIsoParam ?? summary.__fromIso, toIso: toIsoParam ?? summary.__toIso, title: titleParam ?? "Student Attendance Report" });
+    } catch (err) { Alert.alert("Export failed", err instanceof Error ? err.message : "Unable to generate PDF."); }
+    finally { setExportingPdf(false); }
+  }
 
   useEffect(() => {
-    if (!studentId) return;
+    if (userLoading) return;
+
+    const uid = auth.currentUser?.uid;
+    if (!uid || !studentId) {
+      setHasAccess(false);
+      setAccessLoading(false);
+      return;
+    }
+
+    if (userDoc?.role === "admin") {
+      setHasAccess(true);
+      setAccessLoading(false);
+      return;
+    }
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        setAccessLoading(true);
+        const wardSnap = await getDoc(doc(db, "wards", `${uid}_${studentId}`));
+        if (mounted) setHasAccess(wardSnap.exists());
+      } catch (e) {
+        console.error("student report access", e);
+        if (mounted) setHasAccess(false);
+      } finally {
+        if (mounted) setAccessLoading(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [studentId, userDoc?.role, userLoading]);
+
+  useEffect(() => {
+    if (!studentId || !hasAccess) return;
 
     (async () => {
       try {
@@ -108,12 +158,25 @@ setSummary(s);
         setLoading(false);
       }
     })();
-  }, [studentId, fromIsoParam, toIsoParam]);
+  }, [studentId, fromIsoParam, toIsoParam, hasAccess]);
 
-  if (loading || !summary) {
+  if (userLoading || accessLoading || (hasAccess && (loading || !summary))) {
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator />
+      </View>
+    );
+  }
+
+  if (!hasAccess) {
+    return (
+      <View className="flex-1 items-center justify-center bg-slate-50 p-6">
+        <Text className="text-lg font-semibold text-slate-800">
+          Access denied
+        </Text>
+        <Text className="text-center text-slate-500 mt-2">
+          This report is only available to admins or the assigned parent.
+        </Text>
       </View>
     );
   }
@@ -121,7 +184,7 @@ const attendedCount =
   (summary.presentCount ?? 0) + (summary.lateCount ?? 0);
 
   return (
-    <View className="flex-1 p-4 bg-slate-50">
+    <View className="flex-1 p-3 bg-slate-50">
       <View className="flex-row items-center mb-2">
   <Pressable
     onPress={() => router.back()}
@@ -130,11 +193,11 @@ const attendedCount =
   >
     <MaterialIcons
       name="arrow-back"
-      size={26}
+      size={24}
       color="#0f172a"
     />
   </Pressable>
-   <Text className="text-2xl font-bold mb-1">
+   <Text className="text-xl font-bold mb-1">
         {titleParam ?? "Student Report"}
       </Text>
 </View>
@@ -145,23 +208,15 @@ const attendedCount =
         {studentName}
       </Text>
 <Pressable
-  onPress={() =>
-    exportStudentAttendancePdf({
-      studentId,
-      fromIso: fromIsoParam ?? summary.__fromIso,
-      toIso: toIsoParam ?? summary.__toIso,
-      title: titleParam ?? "Student Attendance Report",
-    })
-  }
-  className="bg-indigo-600 py-2 px-4 rounded-lg mb-4"
+  onPress={handleExportPdf}
+  disabled={exportingPdf}
+  className="bg-indigo-600 py-2 px-3 rounded-lg mb-4"
 >
-  <Text className="text-white font-semibold text-center">
-    Export PDF
-  </Text>
+  {exportingPdf ? <View className="flex-row justify-center items-center"><ActivityIndicator color="#fff" /><Text className="text-white font-semibold ml-2">Generating PDF...</Text></View> : <Text className="text-white font-semibold text-center">Export PDF</Text>}
 </Pressable>
 
       {/* -------- SUMMARY -------- */}
-      <View className="bg-white p-4 rounded-xl mb-4 shadow">
+      <View className="bg-white p-3 rounded-lg mb-3 shadow">
         <Text className="font-semibold">Summary</Text>
 
         <View className="flex-row justify-between mt-2">
@@ -215,7 +270,7 @@ const attendedCount =
           data={daily}
           keyExtractor={(d) => d.id}
           renderItem={({ item }) => (
-            <View className="bg-white p-3 rounded-lg mb-2 flex-row justify-between">
+            <View className="bg-white px-3 py-2 rounded-md mb-2 flex-row justify-between">
               <View>
                 <Text className="text-slate-700">
                   {new Date(item.date).toLocaleDateString()}
@@ -230,6 +285,18 @@ const attendedCount =
                     })}
                   </Text>
                 )}
+
+                {item.lateReason ? (
+                  <Text className="text-xs text-amber-700">
+                    Movement book — late arrival: {item.lateReason}
+                  </Text>
+                ) : null}
+
+                {item.earlyCheckoutReason ? (
+                  <Text className="text-xs text-blue-700">
+                    Early out: {item.earlyCheckoutReason}
+                  </Text>
+                ) : null}
 
                 {item.checkOutTime && (
                   <Text className="text-xs text-slate-500">
@@ -270,4 +337,5 @@ const attendedCount =
     </View>
   );
 }
+
 

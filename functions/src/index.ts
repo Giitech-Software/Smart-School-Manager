@@ -1,12 +1,8 @@
+//mobile/functions/src/index.ts
 import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
-import {
-  RekognitionClient,
-  IndexFacesCommand,
-  SearchFacesByImageCommand,
-  DeleteFacesCommand,
-} from "@aws-sdk/client-rekognition";
+export { verifyAttendancePresence } from "./handlers/verifyAttendancePresence";
 
 admin.initializeApp();
 
@@ -43,72 +39,101 @@ function getAwsConfig() {
    1️⃣ INDEX STAFF FACE
 ============================ */
 export const indexStaffFace = onRequest(
-  {
-    secrets: [
-      AWS_ACCESS_KEY_ID,
-      AWS_SECRET_ACCESS_KEY,
-      AWS_REGION,
-      AWS_COLLECTION_ID,
-    ],
-  },
-  async (req, res) => {
-    try {
-      const { base64Image, staffId } = req.body;
+{
+  cors: true,
+  secrets: [
+    AWS_ACCESS_KEY_ID,
+    AWS_SECRET_ACCESS_KEY,
+    AWS_REGION,
+    AWS_COLLECTION_ID,
+  ],
+},
+async (req, res): Promise<void> => {
+  try {
+    const { base64Image, staffId: staffIdFromBody, subjectId } = req.body;
+    const staffId = staffIdFromBody ?? subjectId;
 
-      if (!base64Image || !staffId) {
-        res.status(400).json({ error: "Missing data" });
-        return;
-      }
-
-      const normalizedBase64 = normalizeBase64Image(base64Image);
-      const aws = getAwsConfig();
-
-      const rekognition = new RekognitionClient({
-        region: aws.region,
-        credentials: aws.credentials,
-      });
-
-      const command = new IndexFacesCommand({
-        CollectionId: aws.collectionId,
-        Image: {
-          Bytes: Buffer.from(normalizedBase64, "base64"),
-        },
-        ExternalImageId: staffId,
-      });
-
-      const response = await rekognition.send(command);
-
-      const faceId =
-        response.FaceRecords?.[0]?.Face?.FaceId;
-
-      if (!faceId) {
-        res.status(400).json({ error: "No face detected" });
-        return;
-      }
-
-      await admin.firestore().collection("staff").doc(staffId).update({
-        faceId,
-        biometricEnabled: true,
-      });
-
-      res.json({ success: true, faceId });
+    if (!base64Image || !staffId) {
+      res.status(400).json({ error: "Missing data" });
       return;
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({
-        error: "Indexing failed",
-        details: getErrorMessage(error),
+    }
+
+    const normalizedBase64 = normalizeBase64Image(base64Image);
+    const aws = getAwsConfig();
+
+    const { RekognitionClient, SearchFacesByImageCommand, IndexFacesCommand } = await import("@aws-sdk/client-rekognition");
+    const rekognition = new RekognitionClient({
+      region: aws.region,
+      credentials: aws.credentials,
+    });
+
+    const imageBytes = Buffer.from(normalizedBase64, "base64");
+
+    /* =====================================
+       1️⃣ FIRST CHECK IF FACE ALREADY EXISTS
+    ====================================== */
+
+    const searchCommand = new SearchFacesByImageCommand({
+      CollectionId: aws.collectionId,
+      Image: { Bytes: imageBytes },
+      FaceMatchThreshold: 90,
+      MaxFaces: 1,
+    });
+
+    const searchResult = await rekognition.send(searchCommand);
+    const existingMatch = searchResult.FaceMatches?.[0];
+
+    if (existingMatch && existingMatch.Similarity && existingMatch.Similarity > 90) {
+      res.status(409).json({
+        error: "Face already registered",
+        similarity: existingMatch.Similarity,
       });
       return;
     }
-  }
-);
 
+    /* =====================================
+       2️⃣ INDEX FACE
+    ====================================== */
+
+    const command = new IndexFacesCommand({
+      CollectionId: aws.collectionId,
+      Image: { Bytes: imageBytes },
+      ExternalImageId: staffId,
+    });
+
+    const response = await rekognition.send(command);
+
+    const faceId = response.FaceRecords?.[0]?.Face?.FaceId;
+
+    if (!faceId) {
+      res.status(400).json({ error: "No face detected" });
+      return;
+    }
+
+    await admin.firestore().collection("staff").doc(staffId).update({
+      faceId,
+      biometricEnabled: true,
+    });
+
+    res.json({ success: true, faceId });
+    return;
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      error: "Indexing failed",
+      details: getErrorMessage(error),
+    });
+    return;
+  }
+}
+);
 /* ============================
    2️⃣ SEARCH STAFF FACE
 ============================ */
 export const searchStaffFace = onRequest(
   {
+    cors: true,
     secrets: [
       AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY,
@@ -116,7 +141,7 @@ export const searchStaffFace = onRequest(
       AWS_COLLECTION_ID,
     ],
   },
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     try {
       const { base64Image } = req.body;
 
@@ -128,6 +153,7 @@ export const searchStaffFace = onRequest(
       const normalizedBase64 = normalizeBase64Image(base64Image);
       const aws = getAwsConfig();
 
+      const { RekognitionClient, SearchFacesByImageCommand } = await import("@aws-sdk/client-rekognition");
       const rekognition = new RekognitionClient({
         region: aws.region,
         credentials: aws.credentials,
@@ -153,16 +179,21 @@ export const searchStaffFace = onRequest(
       const staffId = match.Face?.ExternalImageId;
       const similarity = match.Similarity;
 
-      await admin.firestore().collection("staffAttendance").add({
-        staffId,
-        similarity,
-        method: "biometric",
-        timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      });
+      if (!staffId) {
+        res.json({ matched: false });
+        return;
+      }
+
+      const staffDoc = await admin.firestore().collection("staff").doc(staffId).get();
+      if (!staffDoc.exists) {
+        res.json({ matched: false });
+        return;
+      }
 
       res.json({
         matched: true,
         staffId,
+        subjectId: staffId,
         similarity,
       });
       return;
@@ -182,6 +213,7 @@ export const searchStaffFace = onRequest(
 ============================ */
 export const deleteStaffFace = onRequest(
   {
+    cors: true,
     secrets: [
       AWS_ACCESS_KEY_ID,
       AWS_SECRET_ACCESS_KEY,
@@ -189,7 +221,7 @@ export const deleteStaffFace = onRequest(
       AWS_COLLECTION_ID,
     ],
   },
-  async (req, res) => {
+  async (req, res): Promise<void> => {
     try {
       const { faceId } = req.body;
       const aws = getAwsConfig();
@@ -199,6 +231,7 @@ export const deleteStaffFace = onRequest(
         return;
       }
 
+      const { RekognitionClient, DeleteFacesCommand } = await import("@aws-sdk/client-rekognition");
       const rekognition = new RekognitionClient({
         region: aws.region,
         credentials: aws.credentials,
@@ -216,6 +249,171 @@ export const deleteStaffFace = onRequest(
     } catch (error) {
       console.error(error);
       res.status(500).json({ error: "Delete failed" });
+      return;
+    }
+  }
+);
+/* ============================
+   1️⃣ INDEX STUDENT FACE
+============================ */
+export const indexStudentFace = onRequest(
+  {
+    cors: true,
+    secrets: [
+      AWS_ACCESS_KEY_ID,
+      AWS_SECRET_ACCESS_KEY,
+      AWS_REGION,
+      AWS_COLLECTION_ID,
+    ],
+  },
+  async (req, res): Promise<void> => {
+    try {
+      const { base64Image, studentId: studentIdFromBody, subjectId } = req.body;
+      const studentId = studentIdFromBody ?? subjectId;
+
+      if (!base64Image || !studentId) {
+        res.status(400).json({ error: "Missing data" });
+        return;
+      }
+
+      const normalizedBase64 = normalizeBase64Image(base64Image);
+      const aws = getAwsConfig();
+
+      const { RekognitionClient, SearchFacesByImageCommand, IndexFacesCommand } = await import("@aws-sdk/client-rekognition");
+      const rekognition = new RekognitionClient({
+        region: aws.region,
+        credentials: aws.credentials,
+      });
+
+      const imageBytes = Buffer.from(normalizedBase64, "base64");
+
+      const searchCommand = new SearchFacesByImageCommand({
+        CollectionId: aws.collectionId,
+        Image: { Bytes: imageBytes },
+        FaceMatchThreshold: 90,
+        MaxFaces: 1,
+      });
+
+      const searchResult = await rekognition.send(searchCommand);
+      const existingMatch = searchResult.FaceMatches?.[0];
+
+      if (existingMatch && existingMatch.Similarity && existingMatch.Similarity > 90) {
+        res.status(409).json({
+          error: "Face already registered",
+          similarity: existingMatch.Similarity,
+        });
+        return;
+      }
+
+      const command = new IndexFacesCommand({
+        CollectionId: aws.collectionId,
+        Image: { Bytes: imageBytes },
+        ExternalImageId: studentId,
+      });
+
+      const response = await rekognition.send(command);
+      const faceId = response.FaceRecords?.[0]?.Face?.FaceId;
+
+      if (!faceId) {
+        res.status(400).json({ error: "No face detected" });
+        return;
+      }
+
+      await admin.firestore().collection("students").doc(studentId).update({
+        faceId,
+        biometricEnabled: true,
+      });
+
+      res.json({ success: true, faceId });
+      return;
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        error: "Indexing failed",
+        details: getErrorMessage(error),
+      });
+      return;
+    }
+  }
+);
+
+/* ============================
+   2️⃣ SEARCH STUDENT FACE
+============================ */
+export const searchStudentFace = onRequest(
+  {
+    cors: true,
+    secrets: [
+      AWS_ACCESS_KEY_ID,
+      AWS_SECRET_ACCESS_KEY,
+      AWS_REGION,
+      AWS_COLLECTION_ID,
+    ],
+  },
+  async (req, res): Promise<void> => {
+    try {
+      const { base64Image } = req.body;
+
+      if (!base64Image) {
+        res.status(400).json({ error: "Missing image" });
+        return;
+      }
+
+      const normalizedBase64 = normalizeBase64Image(base64Image);
+      const aws = getAwsConfig();
+
+      const { RekognitionClient, SearchFacesByImageCommand } = await import("@aws-sdk/client-rekognition");
+      const rekognition = new RekognitionClient({
+        region: aws.region,
+        credentials: aws.credentials,
+      });
+
+      const command = new SearchFacesByImageCommand({
+        CollectionId: aws.collectionId,
+        Image: {
+          Bytes: Buffer.from(normalizedBase64, "base64"),
+        },
+        FaceMatchThreshold: 85,
+        MaxFaces: 1,
+      });
+
+      const response = await rekognition.send(command);
+      const match = response.FaceMatches?.[0];
+
+      if (!match) {
+        res.json({ matched: false });
+        return;
+      }
+
+      const studentId = match.Face?.ExternalImageId;
+      const similarity = match.Similarity;
+
+      if (!studentId) {
+        res.json({ matched: false });
+        return;
+      }
+
+      const studentDoc = await admin.firestore().collection("students").doc(studentId).get();
+      if (!studentDoc.exists) {
+        res.json({ matched: false });
+        return;
+      }
+
+      res.json({
+        matched: true,
+        studentId,
+        subjectId: studentId,
+        similarity,
+      });
+      return;
+
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({
+        error: "Search failed",
+        details: getErrorMessage(error),
+      });
       return;
     }
   }

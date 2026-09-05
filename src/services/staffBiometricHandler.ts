@@ -9,15 +9,18 @@ export async function handleStaffBiometricCheck({
   mode,
   biometricVerified,
   method,
+  movementReason,
 }: {
   staffId: string;
   mode: "in" | "out";
   biometricVerified: boolean;
   method: StaffBiometricMethod;
+  movementReason?: string | null;
 }) {
   /* ===============================
      VALIDATION
   =============================== */
+
   if (!biometricVerified) {
     throw new Error("Biometric verification failed.");
   }
@@ -29,17 +32,12 @@ export async function handleStaffBiometricCheck({
   /* ===============================
      REGISTER ATTENDANCE
   =============================== */
+
   return await registerStaffAttendance({
     staffId,
     mode,
-    method, // ✅ now typed & compatible
+    method,
     biometric: true,
+    movementReason,
   });
 }
-// In staffBiometricHandler.ts
-export type Staff = {
-  id: string;
-  name: string;
-  role: string;
-  fingerprintId?: string | null;
-};

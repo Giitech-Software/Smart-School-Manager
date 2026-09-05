@@ -2,12 +2,14 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, ActivityIndicator, FlatList } from "react-native";
 import { getAttendanceForDate } from "../../src/services/attendance"; // <-- updated import
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
 export default function AttendanceList() {
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
   const [rows, setRows] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -27,7 +29,7 @@ export default function AttendanceList() {
     }
   }
 
-  if (loading)
+  if (adminLoading || !adminReady || loading)
     return (
       <View className="flex-1 items-center justify-center bg-slate-50">
         <ActivityIndicator />
@@ -36,7 +38,7 @@ export default function AttendanceList() {
 
   return (
     <View className="flex-1 bg-slate-50 p-4">
-      <Text className="text-xl font-semibold mb-4">Today's Attendance</Text>
+      <Text className="text-xl font-semibold mb-4">Today’s Attendance</Text>
 
       <FlatList
         data={rows}

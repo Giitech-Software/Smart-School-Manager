@@ -7,10 +7,13 @@ import * as LocalAuthentication from "expo-local-authentication";
 
 import { getStaffById, upsertStaff } from "../../src/services/staff";
 import KeyboardAwareScreen from "@/components/KeyboardAwareScreen";
+import { useRequireAdmin } from "../../src/hooks/useRouteAuthorization";
+import { MaterialIcons } from "@expo/vector-icons";
 
 export default function EnrollBiometric() {
   const router = useRouter();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id: string }>(); 
+  const { loading: adminLoading, ready: adminReady } = useRequireAdmin();
 
   const [staff, setStaff] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -38,7 +41,18 @@ export default function EnrollBiometric() {
   }, [id]);
 
   const handleEnroll = async () => {
-    if (!staff) return;
+  if (!staff) return;
+
+ // 🔐 Enterprise rule: face must exist first
+if (!staff?.faceId || staff.faceId.trim() === "") {
+  Alert.alert(
+    "Face Required",
+    "You must register a face before enrolling fingerprint."
+  );
+
+  router.push(`/staff/register-face?staffId=${staff.id}`);
+  return;
+}
 
     const compatible = await LocalAuthentication.hasHardwareAsync();
     if (!compatible) {
@@ -54,19 +68,22 @@ export default function EnrollBiometric() {
 
     setEnrolling(true);
     try {
-      const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: `Enroll ${staff.name}`,
-      });
+    const result = await LocalAuthentication.authenticateAsync({
+  promptMessage: `Enroll ${staff.name}`,
+  disableDeviceFallback: true,
+});  
 
       if (result.success) {
         // Generate a pseudo biometricId for simplicity
         const biometricId = `BIO-${Date.now()}`;
 
-        await upsertStaff({
-          ...staff,
-          fingerprintId: biometricId,
-        });
-
+       await upsertStaff({
+  ...staff,
+  fingerprintId: biometricId,
+  biometricEnabled: true,
+  fingerprintEnrolledAt: new Date().toISOString(),
+  fingerprintEnrolledBy: "admin",
+});
         Alert.alert("Enrollment successful ✅");
         router.back();
       } else {
@@ -80,7 +97,7 @@ export default function EnrollBiometric() {
     }
   };
 
-  if (loading) {
+  if (adminLoading || !adminReady || loading) {
     return (
       <View className="flex-1 justify-center items-center bg-white">
         <ActivityIndicator />
@@ -93,6 +110,20 @@ export default function EnrollBiometric() {
   return (
     <KeyboardAwareScreen>
       <View className="flex-1 bg-slate-300 p-4">
+        <View className="flex-row items-center mb-4">
+          <Pressable
+            onPress={() => router.back()}
+            className="p-1 mr-2"
+            hitSlop={8}
+          >
+            <MaterialIcons name="arrow-back" size={26} color="#0f172a" />
+          </Pressable>
+
+          <Text className="text-2xl font-extrabold text-slate-900">
+            Enroll Biometric
+          </Text>
+        </View>
+
         <Text className="text-2xl font-bold mb-4">{staff.name}</Text>
         <Text className="mb-6">Staff ID: {staff.staffId}</Text>
 

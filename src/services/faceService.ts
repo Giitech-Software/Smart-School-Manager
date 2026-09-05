@@ -2,15 +2,21 @@
 
 /* =========================================================
    🔐 Production Rekognition Collection Integration
+   Supports both staff and student face indexing/search 
    Uses Firebase Functions v2 (Secrets enabled)
 ========================================================= */
 
 const PROJECT_ID = "astem-student-register"; // your Firebase project ID
 const REGION = "us-central1"; // must match deployed functions region
 
-const INDEX_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/indexStaffFace`;
-const SEARCH_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/searchStaffFace`;
-const DELETE_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/deleteStaffFace`;
+// Default URLs for staff
+const INDEX_STAFF_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/indexStaffFace`;
+const SEARCH_STAFF_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/searchStaffFace`;
+const DELETE_STAFF_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/deleteStaffFace`;
+
+// Student URLs (adjust if your functions are separate)
+const INDEX_STUDENT_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/indexStudentFace`;
+const SEARCH_STUDENT_URL = `https://${REGION}-${PROJECT_ID}.cloudfunctions.net/searchStudentFace`;
 
 async function readError(response: Response, fallback: string) {
   let details = "";
@@ -22,23 +28,27 @@ async function readError(response: Response, fallback: string) {
   } catch {
     details = await response.text();
   }
-
   const suffix = details ? `: ${details}` : "";
   return `${fallback} (${response.status})${suffix}`;
 }
 
 /* =========================================================
-   1️⃣ Index Staff Face (Registration)
+   1️⃣ Index Face (Registration)
+   Supports staff and student
 ========================================================= */
 export async function indexFace(
-  staffId: string,
-  base64Image: string
+  subjectId: string,
+  base64Image: string,
+  subjectType: "staff" | "student" = "staff"
 ) {
-  const response = await fetch(INDEX_URL, {
+  const url = subjectType === "staff" ? INDEX_STAFF_URL : INDEX_STUDENT_URL;
+  const idField = subjectType === "staff" ? "staffId" : "studentId";
+
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      staffId,
+      [idField]: subjectId,
       base64Image,
     }),
   });
@@ -47,14 +57,20 @@ export async function indexFace(
     throw new Error(await readError(response, "Index failed"));
   }
 
-  return await response.json();
+  return await response.json(); // expected: { success: true, faceId }
 }
 
 /* =========================================================
-   2️⃣ Search Staff Face (Check-in)
+   2️⃣ Search Face (Check-in)
+   Supports staff and student
 ========================================================= */
-export async function searchFace(base64Image: string) {
-  const response = await fetch(SEARCH_URL, {
+export async function searchFace(
+  base64Image: string,
+  subjectType: "staff" | "student" = "staff"
+) {
+  const url = subjectType === "staff" ? SEARCH_STAFF_URL : SEARCH_STUDENT_URL;
+
+  const response = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -66,14 +82,23 @@ export async function searchFace(base64Image: string) {
     throw new Error(await readError(response, "Search failed"));
   }
 
-  return await response.json();
+  const data = await response.json();
+  const matchedSubjectId =
+    data?.subjectId ??
+    (subjectType === "staff" ? data?.staffId : data?.studentId);
+
+  return {
+    ...data,
+    subjectId: matchedSubjectId,
+  }; // expected: { matched: true/false, similarity, subjectId }
 }
 
 /* =========================================================
-   3️⃣ Delete Staff Face (Optional cleanup)
+   3️⃣ Delete Face (Optional cleanup)
+   Only for staff (can extend for student if needed)
 ========================================================= */
 export async function deleteFace(faceId: string) {
-  const response = await fetch(DELETE_URL, {
+  const response = await fetch(DELETE_STAFF_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
